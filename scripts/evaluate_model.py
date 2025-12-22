@@ -1,7 +1,7 @@
 """
 Comprehensive model evaluation script for text generation.
 
-This script loads a trained GPT model and evaluates it with various prompts,
+This script loads a trained model and evaluates it with various prompts,
 token lengths, and sampling strategies.
 
 Usage:
@@ -21,7 +21,7 @@ project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from models.gpt import GPT
+from models.architectures import get_architecture_class
 
 
 # Curated prompts for evaluation - covering different styles and domains
@@ -35,47 +35,58 @@ EVALUATION_PROMPTS = [
 
 
 def load_model(model_path, device):
-    """Load a trained GPT model from checkpoint.
-    
+    """Load a trained model from checkpoint.
+
     Args:
         model_path: Path to model checkpoint file
         device: Torch device to load model on
-    
+
     Returns:
         Tuple of (model, config, tokenizer)
     """
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model file not found: {model_path}")
-    
-    checkpoint = torch.load(model_path, map_location=device)
+
+    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
     config = checkpoint['config']
-    
-    model = GPT(config)
-    model.load_state_dict(checkpoint['model_state_dict'])
+
+    # strip _orig_mod. prefix if present (from torch.compile)
+    state_dict = checkpoint['model_state_dict']
+    state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
+
+    # extract architecture and instantiate dynamically
+    arch_name = config.pop("architecture")
+    ArchClass = get_architecture_class(arch_name)
+    model = ArchClass(config)
+
+    model.load_state_dict(state_dict)
     model.to(device)
     model.eval()
-    
+
     tokenizer = tiktoken.get_encoding("gpt2")
-    
+
+    # restore architecture field
+    config["architecture"] = arch_name
+
     return model, config, tokenizer
 
 
 def generate_text(
-    model, 
-    tokenizer, 
-    prompt, 
-    max_tokens, 
-    temperature=1.0, 
-    top_k=None, 
+    model,
+    tokenizer,
+    prompt,
+    max_tokens,
+    temperature=1.0,
+    top_k=None,
     top_p=None,
     repetition_penalty=1.0,
     config=None,
     device=None
 ):
     """Generate text from a prompt with various sampling strategies.
-    
+
     Args:
-        model: GPT model instance
+        model: Model instance
         tokenizer: Tiktoken tokenizer
         prompt: Starting text prompt
         max_tokens: Number of tokens to generate
@@ -85,7 +96,7 @@ def generate_text(
         repetition_penalty: Penalty for repetition (>1.0 reduces repetition)
         config: Model configuration dict
         device: Torch device
-    
+
     Returns:
         Generated text string
     """
@@ -273,7 +284,7 @@ def find_available_models(models_dir="data/models"):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Evaluate a trained GPT model with comprehensive text generation tests"
+        description="Evaluate a trained model with comprehensive text generation tests"
     )
     parser.add_argument(
         "--model",
