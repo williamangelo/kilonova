@@ -32,6 +32,26 @@ class TestRegisterArchitecture:
 
         assert TestModel.__name__ == "TestModel"
 
+    def test_warns_on_duplicate_registration(self):
+        """decorator should warn when overwriting an existing architecture."""
+        @register_architecture("duplicate_test")
+        class FirstModel:
+            pass
+
+        # should warn and show both old and new class names
+        with pytest.warns(UserWarning) as warning_list:
+            @register_architecture("duplicate_test")
+            class SecondModel:
+                pass
+
+            warning_msg = str(warning_list[0].message)
+            assert "Architecture 'duplicate_test' already registered" in warning_msg
+            assert "FirstModel" in warning_msg
+            assert "SecondModel" in warning_msg
+
+        # verify it still overwrites correctly
+        assert ARCHITECTURE_REGISTRY["duplicate_test"] is SecondModel
+
 
 class TestGetArchitectureClass:
     """test architecture class lookup."""
