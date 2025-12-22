@@ -113,3 +113,27 @@ class TestGPTRegistration:
 
         architectures = list_architectures()
         assert "gpt" in architectures
+
+
+class TestModelsModule:
+    """test models module exports."""
+
+    def test_exports_architecture_functions(self):
+        """models module should export architecture utilities."""
+        import models
+
+        assert hasattr(models, "register_architecture")
+        assert hasattr(models, "get_architecture_class")
+        assert hasattr(models, "list_architectures")
+
+    def test_exports_loader_function(self):
+        """models module should export loader utility."""
+        import models
+
+        assert hasattr(models, "create_model_from_config")
+
+    def test_exports_gpt_class(self):
+        """models module should still export GPT class."""
+        import models
+
+        assert hasattr(models, "GPT")
