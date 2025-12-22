@@ -214,9 +214,6 @@ def run_training(config: TrainConfig) -> Sequence[float]:
 
     torch.manual_seed(123)
 
-    if config.model not in MODEL_CONFIGS:
-        raise ValueError(f"Unknown model preset: {config.model}")
-
     model, model_config = create_model_from_config(config.model)
 
     train_loader, val_loader = create_dataloaders(
