@@ -41,9 +41,14 @@ class TestModelRegistry:
     """tests for model registry behavior"""
 
     def test_get_model_config_returns_complete_config(self):
+        """get_model_config should return all config fields including architecture."""
         config = get_model_config("gpt2-small")
 
-        # all required keys for GPT model
+        # architecture field should be present
+        assert "architecture" in config
+        assert config["architecture"] == "gpt"
+
+        # existing fields
         assert "vocab_size" in config
         assert "context_length" in config
         assert "emb_dim" in config
