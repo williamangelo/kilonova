@@ -93,3 +93,23 @@ class TestListArchitectures:
         assert isinstance(result, list)
         assert "arch1" in result
         assert "arch2" in result
+
+
+class TestGPTRegistration:
+    """test that GPT architecture is properly registered."""
+
+    def test_gpt_registered_in_architecture_registry(self):
+        """GPT should be registered as 'gpt' architecture."""
+        from models.gpt import GPT
+        from models.architectures import get_architecture_class
+
+        gpt_class = get_architecture_class("gpt")
+        assert gpt_class is GPT
+
+    def test_gpt_in_list_architectures(self):
+        """gpt should appear in list of architectures."""
+        from models.gpt import GPT  # trigger import
+        from models.architectures import list_architectures
+
+        architectures = list_architectures()
+        assert "gpt" in architectures
