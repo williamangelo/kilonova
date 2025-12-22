@@ -12,7 +12,7 @@ import torch
 from tqdm import tqdm
 
 from loaders import create_dataloaders
-from models.gpt import GPT
+from models.loader import create_model_from_config
 from osmium.train.config import MODEL_CONFIGS, TrainConfig
 
 
@@ -217,18 +217,16 @@ def run_training(config: TrainConfig) -> Sequence[float]:
     if config.model not in MODEL_CONFIGS:
         raise ValueError(f"Unknown model preset: {config.model}")
 
-    gpt_config = MODEL_CONFIGS[config.model].copy()
+    model, model_config = create_model_from_config(config.model)
 
     train_loader, val_loader = create_dataloaders(
         data_dir=str(config.data_dir),
         batch_size=config.batch_size,
-        max_length=gpt_config["context_length"],
+        max_length=model_config["context_length"],
         max_tokens=config.max_tokens,
         data_fraction=config.data_fraction,
         num_workers=config.num_workers,
     )
-
-    model = GPT(gpt_config)
 
     total_params = sum(p.numel() for p in model.parameters())
 
@@ -239,7 +237,7 @@ def run_training(config: TrainConfig) -> Sequence[float]:
 
     logger.info(
         f"Model: {config.model} ({format_params(total_params)} params, "
-        f"{gpt_config['emb_dim']}d, {gpt_config['n_layers']}L, {gpt_config['n_heads']}H)"
+        f"{model_config['emb_dim']}d, {model_config['n_layers']}L, {model_config['n_heads']}H)"
     )
 
     device = config.device
@@ -309,7 +307,7 @@ def run_training(config: TrainConfig) -> Sequence[float]:
         scheduler=scheduler,
         max_grad_norm=config.max_grad_norm,
         checkpoint_dir=checkpoint_dir,
-        model_config=gpt_config,
+        model_config=model_config,
         model_name=config.model,
     )
 
@@ -323,7 +321,7 @@ def run_training(config: TrainConfig) -> Sequence[float]:
             logger.info(f"Final best model saved: {checkpoint_path}")
             save_training_metrics(config.run_dir, train_losses, val_losses, tokens_seen, lrs)
         else:
-            save_model(model, gpt_config, config.model)
+            save_model(model, model_config, config.model)
     else:
         logger.warning("No best model state found, this should not happen")
 
