@@ -10,6 +10,7 @@ import click
 from osmium.commands.clean import clean_dataset
 from osmium.commands.download import download_dataset
 from osmium.commands.evaluate import evaluate_model as evaluate_model_impl
+from osmium.commands.generate import generate_cmd
 from osmium.commands.info import info_cmd
 from osmium.commands.list_cmd import list_datasets_cmd, list_models_cmd
 from osmium.commands.preprocess import preprocess_data
@@ -60,27 +61,25 @@ def preprocess(dataset: str, input_dir: Path | None, output: Path | None, train_
 @click.option("--data", required=True, help="Dataset name (uses data/processed/<dataset>/).")
 @click.option("--name", type=str, help="Experiment name (auto-generated from config filename if using --config).")
 @click.option("--config", type=click.Path(exists=True, path_type=Path), help="Load hyperparameters from YAML file.")
-@click.option("--resume", is_flag=True, help="Resume from latest checkpoint.")
-@click.option("--resume-from", "resume_checkpoint", type=str, help="Resume from specific checkpoint.")
 @click.option("--max-tokens", type=int, default=None, help="Cap the number of tokens to use.")
 @click.option("--data-fraction", type=float, default=None, help="Fraction of data to consume (0-1).")
 @click.option("--epochs", type=click.IntRange(min=1), default=1, show_default=True, help="Training epochs.")
-@click.option("--batch-size", type=click.IntRange(min=1), default=8, show_default=True, help="Batch size per step.")
+@click.option("--batch-size", type=click.IntRange(min=1), default=2, show_default=True, help="Batch size per step.")
 @click.option("--learning-rate", type=float, default=0.0004, show_default=True, help="Optimizer learning rate.")
 @click.option("--patience", type=click.IntRange(min=1), default=5, show_default=True, help="Early stopping patience.")
 @click.option("--eval-freq", type=click.IntRange(min=1), default=100, show_default=True, help="Eval frequency in steps.")
-@click.option("--eval-iter", type=click.IntRange(min=1), default=10, show_default=True, help="Batches to use for eval.")
+@click.option("--eval-iter", type=click.IntRange(min=1), default=50, show_default=True, help="Batches to use for eval.")
 @click.option("--mixed-precision/--no-mixed-precision", default=None, help="Toggle fp16 mixed precision.")
 @click.option("--compile/--no-compile", "compile_model", default=None, help="Toggle torch.compile for speedups.")
-@click.option("--gradient-accumulation-steps", type=click.IntRange(min=1), default=1, show_default=True, help="Number of gradient accumulation steps.")
+@click.option("--gradient-accumulation-steps", type=click.IntRange(min=1), default=4, show_default=True, help="Number of gradient accumulation steps.")
 @click.option("--device", type=click.Choice(["auto", "cuda", "cpu"]), default="auto", show_default=True, help="Device preference for training.")
 @click.option("--num-workers", type=click.IntRange(min=0), default=0, show_default=True, help="Number of dataloader workers.")
 @click.option("--max-grad-norm", type=float, default=1.0, show_default=True, help="Gradient clipping threshold (0 to disable).")
 @click.option("--warmup-steps", type=int, default=None, help="Override LR warmup steps.")
 @click.option("--min-lr", type=float, default=None, help="Minimum LR after cosine decay.")
-def train(architecture: str, data: str, name: str | None, config: Path | None, resume: bool, resume_checkpoint: str | None, **kwargs: Any) -> None:
+def train(architecture: str, data: str, name: str | None, config: Path | None, **kwargs: Any) -> None:
     """Train a GPT model using preprocessed data."""
-    train_model(architecture, data, name, config, resume, resume_checkpoint, kwargs)
+    train_model(architecture, data, name, config, kwargs)
 
 
 @cli.command(help="Evaluate a trained model.")
@@ -97,14 +96,14 @@ def evaluate(model: str, device: str, output: Path | None, prompt: str | None) -
 @click.argument("model")
 @click.option("--prompt", type=str, help="Generation prompt (omit for interactive mode).")
 @click.option("--interactive", is_flag=True, help="Force interactive mode.")
-@click.option("--temp", type=float, default=1.0, help="Sampling temperature.")
-@click.option("--max-tokens", type=int, default=200, help="Maximum tokens to generate.")
+@click.option("--temp", type=float, default=1.0, show_default=True, help="Sampling temperature.")
+@click.option("--max-tokens", type=int, default=50, show_default=True, help="Maximum tokens to generate.")
 @click.option("--top-k", type=int, help="Top-k sampling.")
 @click.option("--top-p", type=float, help="Nucleus sampling.")
-@click.option("--device", type=click.Choice(["auto", "cuda", "cpu"]), default="auto", help="Device for generation.")
+@click.option("--device", type=click.Choice(["auto", "cuda", "cpu"]), default="auto", show_default=True, help="Device for generation.")
 def generate(model: str, prompt: str | None, interactive: bool, temp: float, max_tokens: int, top_k: int | None, top_p: float | None, device: str) -> None:
     """Interactive text generation from a trained model."""
-    click.echo(f"TODO: Generate from {model}")
+    generate_cmd(model, prompt, interactive, temp, max_tokens, top_k, top_p, device)
 
 
 @cli.group(help="List available datasets or models.")
