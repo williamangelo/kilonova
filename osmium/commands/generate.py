@@ -9,11 +9,11 @@ import torch
 import tiktoken
 
 from osmium.utils import PathResolver
-from models.gpt import GPT
+from models.architectures import get_architecture_class
 
 
-def load_model(checkpoint_path: Path, device: torch.device) -> tuple[GPT, dict, tiktoken.Encoding]:
-    """load a trained GPT model from checkpoint
+def load_model(checkpoint_path: Path, device: torch.device) -> tuple:
+    """load a trained model from checkpoint
 
     args:
         checkpoint_path: path to model checkpoint file
@@ -25,11 +25,14 @@ def load_model(checkpoint_path: Path, device: torch.device) -> tuple[GPT, dict, 
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     config = checkpoint["config"]
 
-    model = GPT(config)
-
     # strip _orig_mod. prefix if present (from torch.compile)
     state_dict = checkpoint["model_state_dict"]
     state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
+
+    # extract architecture and instantiate dynamically
+    arch_name = config.pop("architecture")
+    ArchClass = get_architecture_class(arch_name)
+    model = ArchClass(config)
 
     model.load_state_dict(state_dict)
     model.to(device)
@@ -37,11 +40,14 @@ def load_model(checkpoint_path: Path, device: torch.device) -> tuple[GPT, dict, 
 
     tokenizer = tiktoken.get_encoding("gpt2")
 
+    # restore architecture field
+    config["architecture"] = arch_name
+
     return model, config, tokenizer
 
 
 def generate_text(
-    model: GPT,
+    model,
     tokenizer: tiktoken.Encoding,
     prompt: str,
     max_tokens: int,
@@ -54,7 +60,7 @@ def generate_text(
     """generate text from a prompt with various sampling strategies
 
     args:
-        model: GPT model instance
+        model: model instance
         tokenizer: tiktoken tokenizer
         prompt: starting text prompt
         max_tokens: number of tokens to generate
@@ -166,7 +172,7 @@ def resolve_checkpoint(model: str) -> Path:
 
 
 def interactive_loop(
-    model: GPT,
+    model,
     tokenizer: tiktoken.Encoding,
     config: dict,
     device: torch.device,
