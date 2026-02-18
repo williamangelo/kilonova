@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import logging
 import math
-import os
 from typing import Sequence
 
 import torch
@@ -13,7 +12,7 @@ from tqdm import tqdm
 
 from loaders import create_dataloaders
 from models.loader import create_model_from_config
-from osmium.train.config import MODEL_CONFIGS, TrainConfig
+from osmium.train.config import TrainConfig
 
 
 class TqdmLoggingHandler(logging.Handler):
@@ -28,7 +27,6 @@ class TqdmLoggingHandler(logging.Handler):
 
 
 logger = logging.getLogger(__name__)
-torch.set_float32_matmul_precision('high')
 
 
 def calc_loss_batch(input_batch, target_batch, model, device):
@@ -66,16 +64,36 @@ def evaluate_model(model, train_loader, val_loader, device, eval_iter):
     return train_loss, val_loss
 
 
-def train_model(model, train_loader, val_loader, optimizer, device, num_epochs,
-                eval_freq, eval_iter, patience,
-                gradient_accumulation_steps, scaler, scheduler=None, max_grad_norm=1.0,
-                checkpoint_dir=None, model_config=None, model_name=None):
-    """Train model with early stopping, gradient accumulation, and mixed precision."""
+def train_model_loop(model, train_loader, val_loader, optimizer, device, num_epochs,
+                     eval_freq, eval_iter, patience,
+                     gradient_accumulation_steps, scaler, scheduler=None, max_grad_norm=1.0,
+                     checkpoint_dir=None, model_config=None, model_name=None):
+    """execute the training loop with early stopping, gradient accumulation, and mixed precision."""
     train_losses, val_losses, track_tokens_seen, lrs = [], [], [], []
     tokens_seen, global_step = 0, 0
     best_val_loss = float('inf')
     steps_without_improvement = 0
     best_model_state = None
+
+    # initial evaluation before training starts (baseline)
+    train_loss, val_loss = evaluate_model(model, train_loader, val_loader, device, eval_iter)
+    train_losses.append(train_loss)
+    val_losses.append(val_loss)
+    track_tokens_seen.append(0)
+    lrs.append(optimizer.param_groups[0]['lr'])
+    best_val_loss = val_loss
+    best_model_state = {
+        'model_state_dict': {k: v.cpu() for k, v in model.state_dict().items()},
+        'config': model_config,
+        'model_name': model_name,
+        'val_loss': best_val_loss,
+        'epoch': 0,
+        'global_step': 0,
+    }
+    if checkpoint_dir:
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        torch.save(best_model_state, checkpoint_dir / "best.pth")
+    logger.info(f"Initial eval | Train: {train_loss:.3f} | Val: {val_loss:.3f}")
 
     for epoch in range(num_epochs):
         model.train()
@@ -86,7 +104,7 @@ def train_model(model, train_loader, val_loader, optimizer, device, num_epochs,
         pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}", leave=False)
 
         for batch_idx, (input_batch, target_batch) in enumerate(pbar):
-            with torch.amp.autocast('cuda', enabled=(scaler is not None)):
+            with torch.amp.autocast(device.type, enabled=(scaler is not None)):
                 loss = calc_loss_batch(input_batch, target_batch, model, device)
 
             loss = loss / gradient_accumulation_steps
@@ -158,26 +176,11 @@ def train_model(model, train_loader, val_loader, optimizer, device, num_epochs,
                         logger.info(f"Saved best checkpoint: {checkpoint_path}")
                 else:
                     steps_without_improvement += 1
-                    if steps_without_improvement >= patience:
+                    if patience is not None and steps_without_improvement >= patience:
                         logger.info(f"Early stopping after {patience} steps without improvement")
                         return train_losses, val_losses, track_tokens_seen, lrs, best_model_state
 
     return train_losses, val_losses, track_tokens_seen, lrs, best_model_state
-
-
-def save_model(model, config, model_name, save_dir="data/models", checkpoint_name="best.pth"):
-    """Save trained model to disk."""
-    os.makedirs(save_dir, exist_ok=True)
-    model_path = os.path.join(save_dir, checkpoint_name)
-
-    checkpoint = {
-        'model_state_dict': {k: v.cpu() for k, v in model.state_dict().items()},
-        'config': config,
-        'model_name': model_name
-    }
-
-    torch.save(checkpoint, model_path)
-    logger.info(f"Model saved: {model_path}")
 
 
 def save_training_metrics(run_dir, train_losses, val_losses, tokens_seen, lrs):
@@ -212,7 +215,10 @@ def run_training(config: TrainConfig) -> Sequence[float]:
     """Execute the full training pipeline using an already parsed config."""
     _configure_logging()
 
-    torch.manual_seed(123)
+    # use TF32 for matmul on ampere+ GPUs (20-30% speedup with minimal precision loss)
+    torch.set_float32_matmul_precision('high')
+
+    torch.manual_seed(123)  # fixed seed for reproducibility
 
     model, model_config = create_model_from_config(config.model)
 
@@ -250,6 +256,7 @@ def run_training(config: TrainConfig) -> Sequence[float]:
         logger.info("Compiling model with torch.compile")
         model = torch.compile(model)
 
+    # weight_decay=0.1 is standard for transformer training (GPT-2, GPT-3, LLaMA)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=config.learning_rate,
@@ -265,9 +272,12 @@ def run_training(config: TrainConfig) -> Sequence[float]:
         )
 
     total_steps = (len(train_loader) // config.gradient_accumulation_steps) * config.epochs
+    # default warmup is 10% of training (common practice from BERT, GPT-2 papers)
     warmup_steps = config.warmup_steps if config.warmup_steps is not None else int(0.1 * total_steps)
+    # default min_lr is 10% of peak lr (standard for cosine schedules)
     min_lr = config.min_lr if config.min_lr is not None else config.learning_rate * 0.1
 
+    # linear warmup followed by cosine annealing to min_lr
     def lr_lambda(current_step):
         if current_step < warmup_steps:
             return current_step / max(1, warmup_steps)
@@ -289,7 +299,7 @@ def run_training(config: TrainConfig) -> Sequence[float]:
     # prepare checkpoint directory
     checkpoint_dir = config.run_dir / "checkpoints" if config.run_dir else None
 
-    train_losses, val_losses, tokens_seen, lrs, best_model_state = train_model(
+    train_losses, val_losses, tokens_seen, lrs, best_model_state = train_model_loop(
         model=model,
         train_loader=train_loader,
         val_loader=val_loader,
@@ -308,17 +318,10 @@ def run_training(config: TrainConfig) -> Sequence[float]:
         model_name=config.model,
     )
 
-    # save best model to run directory if provided, otherwise to data/models
+    # save metrics (checkpoint already saved during training when best found)
     if best_model_state:
         if config.run_dir:
-            checkpoint_dir = config.run_dir / "checkpoints"
-            checkpoint_dir.mkdir(parents=True, exist_ok=True)
-            checkpoint_path = checkpoint_dir / "best.pth"
-            torch.save(best_model_state, checkpoint_path)
-            logger.info(f"Final best model saved: {checkpoint_path}")
             save_training_metrics(config.run_dir, train_losses, val_losses, tokens_seen, lrs)
-        else:
-            save_model(model, model_config, config.model)
     else:
         logger.warning("No best model state found, this should not happen")
 

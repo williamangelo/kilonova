@@ -49,19 +49,3 @@ class TestPathResolver:
         resolver = PathResolver()
         assert resolver.run_dir("baseline") == Path("data/runs/baseline")
 
-    def test_ensure_exists_directory(self, tmp_path):
-        resolver = PathResolver()
-        new_dir = tmp_path / "new_directory"
-        result = resolver.ensure_exists(new_dir)
-        assert result == new_dir
-        assert new_dir.exists()
-        assert new_dir.is_dir()
-
-    def test_ensure_exists_file_parent(self, tmp_path):
-        resolver = PathResolver()
-        new_file = tmp_path / "subdir" / "file.txt"
-        result = resolver.ensure_exists(new_file, is_file=True)
-        assert result == new_file
-        assert new_file.parent.exists()
-        assert new_file.parent.is_dir()
-        assert not new_file.exists()

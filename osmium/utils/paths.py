@@ -27,13 +27,6 @@ class PathResolver:
         """resolve training run directory"""
         return self.base_dir / "runs" / name
 
-    def ensure_exists(self, path: Path, *, is_file: bool = False) -> Path:
-        """ensure directory exists, creating if needed"""
-        if is_file:
-            path.parent.mkdir(parents=True, exist_ok=True)
-        else:
-            path.mkdir(parents=True, exist_ok=True)
-        return path
 
 
 __all__ = ["PathResolver"]

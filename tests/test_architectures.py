@@ -95,24 +95,24 @@ class TestListArchitectures:
         assert "arch2" in result
 
 
-class TestGPTRegistration:
-    """test that GPT architecture is properly registered."""
+class TestGPT2Registration:
+    """test that GPT2 architecture is properly registered."""
 
-    def test_gpt_registered_in_architecture_registry(self):
-        """GPT should be registered as 'gpt' architecture."""
-        from models.gpt import GPT
+    def test_gpt2_registered_in_architecture_registry(self):
+        """GPT2 should be registered as 'gpt2' architecture."""
+        from models.gpt2 import GPT2
         from models.architectures import get_architecture_class
 
-        gpt_class = get_architecture_class("gpt")
-        assert gpt_class is GPT
+        gpt2_class = get_architecture_class("gpt2")
+        assert gpt2_class is GPT2
 
-    def test_gpt_in_list_architectures(self):
-        """gpt should appear in list of architectures."""
-        from models.gpt import GPT  # trigger import
+    def test_gpt2_in_list_architectures(self):
+        """gpt2 should appear in list of architectures."""
+        from models.gpt2 import GPT2  # trigger import
         from models.architectures import list_architectures
 
         architectures = list_architectures()
-        assert "gpt" in architectures
+        assert "gpt2" in architectures
 
 
 class TestModelsModule:
@@ -132,8 +132,8 @@ class TestModelsModule:
 
         assert hasattr(models, "create_model_from_config")
 
-    def test_exports_gpt_class(self):
-        """models module should still export GPT class."""
+    def test_exports_gpt2_class(self):
+        """models module should export GPT2 class."""
         import models
 
-        assert hasattr(models, "GPT")
+        assert hasattr(models, "GPT2")

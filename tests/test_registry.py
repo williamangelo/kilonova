@@ -3,7 +3,7 @@
 import pytest
 
 from loaders.cleaning.registry import get_cleaner, get_source, is_registered as is_dataset_registered
-from models.registry import get_model_config, is_registered as is_model_registered, list_architectures
+from models.registry import get_model_config, is_registered as is_model_registered, list_models
 
 
 class TestDatasetRegistry:
@@ -46,7 +46,7 @@ class TestModelRegistry:
 
         # architecture field should be present
         assert "architecture" in config
-        assert config["architecture"] == "gpt"
+        assert config["architecture"] == "gpt2"
 
         # existing fields
         assert "vocab_size" in config
@@ -71,7 +71,7 @@ class TestModelRegistry:
         with pytest.raises(ValueError) as exc_info:
             get_model_config("nonexistent")
 
-        assert "Unknown architecture" in str(exc_info.value)
+        assert "Unknown model" in str(exc_info.value)
         assert "nonexistent" in str(exc_info.value)
 
     def test_get_model_config_error_lists_available_architectures(self):
@@ -83,7 +83,7 @@ class TestModelRegistry:
         assert "gpt2-small" in error_msg or "Available" in error_msg
 
     def test_is_registered_returns_true_for_all_listed_architectures(self):
-        for arch in list_architectures():
+        for arch in list_models():
             assert is_model_registered(arch)
 
     def test_is_registered_returns_false_for_unknown(self):
@@ -91,13 +91,13 @@ class TestModelRegistry:
         assert not is_model_registered("")
 
     def test_list_architectures_returns_non_empty_list(self):
-        archs = list_architectures()
+        archs = list_models()
         assert len(archs) > 0
         assert all(isinstance(a, str) for a in archs)
 
     def test_model_configs_have_valid_dimensions(self):
         """sanity check that model dimensions are internally consistent"""
-        for arch in list_architectures():
+        for arch in list_models():
             config = get_model_config(arch)
             # emb_dim must be divisible by n_heads
             assert config["emb_dim"] % config["n_heads"] == 0, f"{arch} has invalid dimensions"

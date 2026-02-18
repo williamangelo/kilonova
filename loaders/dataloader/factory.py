@@ -152,26 +152,3 @@ def create_dataloaders(
     )
 
     return train_loader, val_loader
-
-
-def get_dataset_info(data_dir: str | Path) -> dict:
-    """Get information about a preprocessed dataset.
-
-    Args:
-        data_dir: Directory containing preprocessed data
-
-    Returns:
-        Dictionary with dataset statistics
-    """
-    meta = load_meta(data_dir)
-
-    data_path = Path(data_dir)
-    train_size = (data_path / "train.bin").stat().st_size
-    val_size = (data_path / "val.bin").stat().st_size
-
-    return {
-        **meta,
-        "train_size_mb": train_size / (1024**2),
-        "val_size_mb": val_size / (1024**2),
-        "total_size_mb": (train_size + val_size) / (1024**2),
-    }

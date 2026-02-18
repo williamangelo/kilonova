@@ -7,7 +7,7 @@ from typing import Any
 
 import click
 
-from models.registry import is_registered as is_model_registered
+from models.registry import is_registered as is_model_registered, list_models
 from osmium.train.config import TrainConfig
 from osmium.train.runner import run_training
 from osmium.utils import PathResolver
@@ -21,7 +21,17 @@ def train_model(
     config: Path | None,
     cli_params: dict[str, Any],
 ) -> None:
-    """train a GPT model using preprocessed data
+    """train a model using preprocessed data
+
+    config precedence (lowest to highest):
+        1. hardcoded defaults (defined in this function)
+        2. YAML config file (--config flag)
+        3. CLI parameters (explicit flags like --epochs, --batch-size)
+
+    defaults follow modern LLM training practices:
+        - single-epoch training through full dataset (chinchilla optimal)
+        - no early stopping (checkpoint-based selection post-training)
+        - eval every 500 steps (reduced noise, matches SOTA practices)
 
     args:
         architecture: model architecture from registry
@@ -34,7 +44,7 @@ def train_model(
     if not is_model_registered(architecture):
         raise click.ClickException(
             f"Unknown architecture: {architecture}\n"
-            f"Available: {', '.join(['gpt2-small', 'gpt2-medium', 'gpt2-large', 'gpt2-xlarge'])}"
+            f"Available: {', '.join(list_models())}"
         )
 
     resolver = PathResolver()
@@ -72,25 +82,27 @@ def train_model(
             f"Choose a different --name"
         )
 
-    # start with CLI defaults
-    config_values = {
+    # hardcoded defaults based on modern LLM training research (GPT-3, LLaMA, Chinchilla)
+    # config precedence: defaults < YAML config < CLI params
+    defaults = {
         "epochs": 1,
         "batch_size": 2,
         "learning_rate": 0.0004,
-        "patience": 5,
-        "eval_freq": 100,
+        "patience": None,  # disable early stopping (modern approach: checkpoint-based selection)
+        "eval_freq": 500,  # evaluate every 500 steps (reduced noise, matches SOTA)
         "eval_iter": 50,
         "gradient_accumulation_steps": 4,
         "device": "auto",
         "num_workers": 0,
         "max_grad_norm": 1.0,
-        "max_tokens": None,
+        "max_tokens": None,  # use full dataset (chinchilla optimal: ~20 tokens per parameter)
         "data_fraction": None,
         "mixed_precision": None,
         "compile_model": None,
         "warmup_steps": None,
         "min_lr": None,
     }
+    config_values = defaults.copy()
 
     # load config from file if provided (overrides defaults)
     if config:
@@ -99,11 +111,9 @@ def train_model(
         config_values.update(yaml_config)
 
     # merge CLI parameters (CLI takes precedence over everything)
-    # only override if CLI param was explicitly provided (not the default)
+    # only override if CLI param differs from the hardcoded default
     for key, value in cli_params.items():
-        # for None defaults, any value overrides
-        # for non-None defaults, only override if different from default
-        if key in config_values and value != config_values.get(key):
+        if key in config_values and value != defaults.get(key):
             config_values[key] = value
 
     # add required fields

@@ -6,7 +6,26 @@ from pathlib import Path
 
 import click
 
-from osmium.utils import PathResolver
+from osmium.commands.generate import (
+    load_model,
+    generate_text,
+    resolve_checkpoint,
+)
+from osmium.train.config import resolve_device
+
+
+# curated prompts for evaluation
+EVALUATION_PROMPTS = [
+    "Every effort moves you",
+    "Once upon a time",
+    "The future of artificial intelligence will",
+]
+
+
+def print_section(title: str) -> None:
+    """print a section header"""
+    click.echo(f"\n{title}")
+    click.echo("-" * len(title))
 
 
 def evaluate_model(model: str, device: str, output: Path | None, prompt: str | None) -> None:
@@ -18,59 +37,110 @@ def evaluate_model(model: str, device: str, output: Path | None, prompt: str | N
         output: optional output file for results
         prompt: optional test prompt for generation
     """
-    resolver = PathResolver()
+    # resolve checkpoint and device
+    checkpoint_path = resolve_checkpoint(model)
+    torch_device = resolve_device(device)
 
-    # determine if model is a run name or checkpoint path
-    model_path = Path(model)
-    if not model_path.exists():
-        # assume it's a run name
-        run_dir = resolver.run_dir(model)
-        if not run_dir.exists():
-            raise click.ClickException(
-                f"Run '{model}' not found at {run_dir}\n"
-                f"Available runs in data/runs/"
-            )
+    click.echo(f"Loading model: {checkpoint_path}")
+    click.echo(f"Device: {torch_device}")
 
-        # use best.pth checkpoint if available, otherwise latest
-        checkpoint_dir = run_dir / "checkpoints"
-        if not checkpoint_dir.exists():
-            raise click.ClickException(
-                f"No checkpoints found for run '{model}' at {checkpoint_dir}"
-            )
+    # load model
+    model_instance, config, tokenizer = load_model(checkpoint_path, torch_device)
+    click.echo("Model loaded")
 
-        best_checkpoint = checkpoint_dir / "best.pth"
-        if best_checkpoint.exists():
-            model_path = best_checkpoint
-        else:
-            # find latest checkpoint
-            checkpoints = sorted(checkpoint_dir.glob("epoch-*.pth"))
-            if not checkpoints:
-                raise click.ClickException(
-                    f"No checkpoints found in {checkpoint_dir}"
-                )
-            model_path = checkpoints[-1]
+    # collect output lines
+    output_lines = []
 
-        click.echo(f"Using checkpoint: {model_path}")
+    def log(message: str) -> None:
+        """log to console and collect for file output"""
+        click.echo(message)
+        output_lines.append(message)
 
-    # validate checkpoint exists
-    if not model_path.exists():
-        raise click.ClickException(f"Checkpoint not found: {model_path}")
-
-    # TODO: implement actual evaluation logic
-    # for now, just show placeholder
-    click.echo(f"\nEvaluating model: {model_path}")
-    click.echo(f"Device: {device}")
+    # if custom prompt provided, run single test
     if prompt:
-        click.echo(f"Test prompt: {prompt}")
-    if output:
-        click.echo(f"Output file: {output}")
+        print_section("Custom Prompt Evaluation")
+        log(f"\nPrompt: {prompt}")
+        text = generate_text(
+            model=model_instance,
+            tokenizer=tokenizer,
+            prompt=prompt,
+            max_tokens=50,
+            temperature=0.7,
+            top_p=0.9,
+            config=config,
+            device=torch_device,
+        )
+        log(text)
+    else:
+        # run standard test suite
+        token_lengths = [15, 50, 100]
+        temperatures = [0.0, 0.7, 1.2]
 
-    click.echo("\n[Evaluation logic to be implemented]")
-    click.echo("This will run comprehensive tests including:")
-    click.echo("  - Token length variation")
-    click.echo("  - Temperature comparison")
-    click.echo("  - Sampling strategies (top-k, top-p)")
-    click.echo("  - Multiple evaluation prompts")
+        # test 1: token length variation
+        print_section("Test 1: Token Length Variation")
+        test_prompt = EVALUATION_PROMPTS[0]
+
+        for length in token_lengths:
+            log(f"\n[{length} tokens, temp=0.7] {test_prompt}")
+            text = generate_text(
+                model=model_instance,
+                tokenizer=tokenizer,
+                prompt=test_prompt,
+                max_tokens=length,
+                temperature=0.7,
+                top_p=0.9,
+                config=config,
+                device=torch_device,
+            )
+            log(text)
+
+        # test 2: temperature comparison
+        print_section("Test 2: Temperature Comparison")
+        test_prompt = EVALUATION_PROMPTS[1]
+
+        for temp in temperatures:
+            log(f"\n[temp={temp}] {test_prompt}")
+            text = generate_text(
+                model=model_instance,
+                tokenizer=tokenizer,
+                prompt=test_prompt,
+                max_tokens=50,
+                temperature=temp,
+                top_p=0.9,
+                config=config,
+                device=torch_device,
+            )
+            log(text)
+
+        # test 3: sampling strategies
+        print_section("Test 3: Sampling Strategies")
+        test_prompt = EVALUATION_PROMPTS[2]
+
+        strategies = [
+            ("Greedy", {"temperature": 0.0}),
+            ("Top-k=40", {"temperature": 0.8, "top_k": 40}),
+            ("Top-p=0.9", {"temperature": 0.8, "top_p": 0.9}),
+        ]
+
+        for strategy_name, params in strategies:
+            log(f"\n[{strategy_name}] {test_prompt}")
+            text = generate_text(
+                model=model_instance,
+                tokenizer=tokenizer,
+                prompt=test_prompt,
+                max_tokens=50,
+                config=config,
+                device=torch_device,
+                **params,
+            )
+            log(text)
+
+    # save to file if requested
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        with open(output, "w") as f:
+            f.write("\n".join(output_lines))
+        click.echo(f"\nResults saved to: {output}")
 
     click.secho("\n✓ Evaluation complete", fg="green")
 

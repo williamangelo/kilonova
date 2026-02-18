@@ -9,6 +9,7 @@ import torch
 import tiktoken
 
 from osmium.utils import PathResolver
+from osmium.train.config import resolve_device
 from models.architectures import get_architecture_class
 
 
@@ -30,7 +31,8 @@ def load_model(checkpoint_path: Path, device: torch.device) -> tuple:
     state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
 
     # extract architecture and instantiate dynamically
-    arch_name = config.pop("architecture")
+    # backward compatibility: default to "gpt2" for old checkpoints
+    arch_name = config.pop("architecture", "gpt2")
     ArchClass = get_architecture_class(arch_name)
     model = ArchClass(config)
 
@@ -125,15 +127,6 @@ def generate_text(
     generated_text = tokenizer.decode(full_sequence)
 
     return generated_text
-
-
-def resolve_device(device_str: str) -> torch.device:
-    """resolve device string to torch.device"""
-    if device_str == "auto":
-        if torch.cuda.is_available():
-            return torch.device("cuda")
-        return torch.device("cpu")
-    return torch.device(device_str)
 
 
 def resolve_checkpoint(model: str) -> Path:

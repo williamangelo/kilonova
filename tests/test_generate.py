@@ -6,7 +6,8 @@ from unittest.mock import patch
 import pytest
 import torch
 
-from osmium.commands.generate import resolve_checkpoint, resolve_device
+from osmium.commands.generate import resolve_checkpoint
+from osmium.train.config import resolve_device
 
 
 class TestResolveDevice:
@@ -17,8 +18,14 @@ class TestResolveDevice:
         assert device == torch.device("cpu")
 
     def test_explicit_cuda_returns_cuda(self):
-        device = resolve_device("cuda")
-        assert device == torch.device("cuda")
+        with patch("osmium.train.config.torch.cuda.is_available", return_value=True):
+            device = resolve_device("cuda")
+            assert device == torch.device("cuda")
+
+    def test_explicit_cuda_raises_when_unavailable(self):
+        with patch("osmium.train.config.torch.cuda.is_available", return_value=False):
+            with pytest.raises(ValueError, match="CUDA device requested"):
+                resolve_device("cuda")
 
     def test_auto_with_cuda_available_returns_cuda(self):
         with patch("torch.cuda.is_available", return_value=True):

@@ -15,7 +15,7 @@ from osmium.commands.info import info_cmd
 from osmium.commands.list_cmd import list_datasets_cmd, list_models_cmd
 from osmium.commands.preprocess import preprocess_data
 from osmium.commands.train import train_model
-from osmium.train.config import MODEL_CONFIGS
+from models.registry import MODEL_REGISTRY
 
 
 def _warn(message: str) -> None:
@@ -56,8 +56,8 @@ def preprocess(dataset: str, input_dir: Path | None, output: Path | None, train_
     preprocess_data(dataset, input_dir, output, train_split)
 
 
-@cli.command(help="Train a GPT model using preprocessed data.")
-@click.argument("architecture", type=click.Choice(tuple(MODEL_CONFIGS.keys())))
+@cli.command(help="Train a model using preprocessed data. Defaults follow modern LLM training practices (single-epoch, checkpoint-based evaluation).")
+@click.argument("architecture", type=click.Choice(tuple(MODEL_REGISTRY.keys())))
 @click.option("--data", required=True, help="Dataset name (uses data/processed/<dataset>/).")
 @click.option("--name", type=str, help="Experiment name (auto-generated from config filename if using --config).")
 @click.option("--config", type=click.Path(exists=True, path_type=Path), help="Load hyperparameters from YAML file.")
@@ -66,8 +66,8 @@ def preprocess(dataset: str, input_dir: Path | None, output: Path | None, train_
 @click.option("--epochs", type=click.IntRange(min=1), default=1, show_default=True, help="Training epochs.")
 @click.option("--batch-size", type=click.IntRange(min=1), default=2, show_default=True, help="Batch size per step.")
 @click.option("--learning-rate", type=float, default=0.0004, show_default=True, help="Optimizer learning rate.")
-@click.option("--patience", type=click.IntRange(min=1), default=5, show_default=True, help="Early stopping patience.")
-@click.option("--eval-freq", type=click.IntRange(min=1), default=100, show_default=True, help="Eval frequency in steps.")
+@click.option("--patience", type=int, default=None, help="Early stopping patience (None=disabled, trains to completion).")
+@click.option("--eval-freq", type=click.IntRange(min=1), default=500, show_default=True, help="Eval frequency in steps.")
 @click.option("--eval-iter", type=click.IntRange(min=1), default=50, show_default=True, help="Batches to use for eval.")
 @click.option("--mixed-precision/--no-mixed-precision", default=None, help="Toggle fp16 mixed precision.")
 @click.option("--compile/--no-compile", "compile_model", default=None, help="Toggle torch.compile for speedups.")

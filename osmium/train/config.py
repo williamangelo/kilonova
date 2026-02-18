@@ -9,13 +9,9 @@ import warnings
 
 import torch
 
-from models.registry import MODEL_REGISTRY
 from osmium.utils.platform import is_macos
 
 WarnFunc = Callable[[str], None]
-
-# re-export for backward compatibility
-MODEL_CONFIGS = MODEL_REGISTRY
 
 
 @dataclass(slots=True)
@@ -30,7 +26,7 @@ class TrainConfig:
     epochs: int
     batch_size: int
     learning_rate: float
-    patience: int
+    patience: int | None
     eval_freq: int
     eval_iter: int
     compile_model: bool
@@ -51,7 +47,7 @@ class TrainConfig:
         compile_request = values.pop("compile_model")
         num_workers_request = values.pop("num_workers")
 
-        device = _resolve_device(device_spec)
+        device = resolve_device(device_spec)
 
         # mixed precision: only works on CUDA
         mixed_precision = _resolve_mixed_precision(
@@ -61,11 +57,7 @@ class TrainConfig:
         )
 
         # torch.compile: enabled by default on CUDA and CPU
-        compile_model = _resolve_compile_model(
-            requested=compile_request,
-            device=device,
-            warn=warn,
-        )
+        compile_model = _resolve_compile_model(compile_request)
 
         # num_workers: must be 0 on macOS due to multiprocessing issues
         num_workers = _resolve_num_workers(
@@ -96,7 +88,7 @@ class TrainConfig:
         )
 
 
-def _resolve_device(device_spec: str) -> torch.device:
+def resolve_device(device_spec: str) -> torch.device:
     """Resolve the requested device string into a torch.device."""
     if device_spec == "auto":
         if torch.cuda.is_available():
@@ -134,11 +126,7 @@ def _resolve_mixed_precision(
     return False if requested is None else requested
 
 
-def _resolve_compile_model(
-    requested: bool | None,
-    device: torch.device,
-    warn: WarnFunc | None,
-) -> bool:
+def _resolve_compile_model(requested: bool | None) -> bool:
     """resolve torch.compile setting.
 
     torch.compile provides 20-40% speedup on both CPU and CUDA, enabled by default.
@@ -179,4 +167,4 @@ def _emit_warning(warn: WarnFunc | None, message: str) -> None:
         warnings.warn(message, RuntimeWarning, stacklevel=2)
 
 
-__all__ = ["TrainConfig", "MODEL_CONFIGS"]
+__all__ = ["TrainConfig", "resolve_device"]
