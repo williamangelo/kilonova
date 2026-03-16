@@ -258,6 +258,9 @@ class TestPreprocessDataset:
         assert meta["total_tokens"] > 0
         assert (output_dir / "train.bin").exists()
         assert (output_dir / "val.bin").exists()
+        assert meta["has_doc_boundaries"] is True
+        assert (output_dir / "train_doc_starts.npy").exists()
+        assert (output_dir / "val_doc_starts.npy").exists()
 
     def test_split_doc_tracked_in_metadata(self, tmp_path):
         """when a doc straddles the split, split_doc_index should be set."""
@@ -280,19 +283,23 @@ class TestPreprocessDataset:
         assert meta["split_doc_index"] is not None
 
     def test_no_split_yields_null_split_doc_index(self, tmp_path):
-        """when split falls exactly on a doc boundary, split_doc_index is null."""
+        """when all tokens fit in train, split_doc_index is null."""
         input_dir = tmp_path / "input"
         output_dir = tmp_path / "output"
         input_dir.mkdir()
 
-        # single file — all goes to train, nothing to split
+        # train_ratio=1.0 means everything goes to train — no split ever occurs
         (input_dir / "doc.txt").write_text("Hello.", encoding="utf-8")
 
         meta = preprocess_dataset(
             str(input_dir), str(output_dir), train_ratio=1.0
         )
 
+        # no file was ever split, so split_doc_index must be None
         assert meta["split_doc_index"] is None
+        # all tokens go to train, val is empty
+        assert meta["val_tokens"] == 0
+        assert meta["train_tokens"] == meta["total_tokens"]
 
     def test_empty_file_produces_eot_only(self, tmp_path):
         """empty .txt file should produce a single EOT token."""
@@ -303,11 +310,11 @@ class TestPreprocessDataset:
         (input_dir / "empty.txt").write_text("", encoding="utf-8")
         (input_dir / "nonempty.txt").write_text("Hello world.", encoding="utf-8")
 
-        meta = preprocess_dataset(str(input_dir), str(output_dir))
+        # train_ratio=1.0 guarantees both docs land in train
+        meta = preprocess_dataset(str(input_dir), str(output_dir), train_ratio=1.0)
 
-        # both docs should be tracked in boundaries
         train_starts = np.load(output_dir / "train_doc_starts.npy")
-        # empty file (doc_000) is first alphabetically, it contributes 1 EOT token
-        # so second doc starts at offset 1
-        if len(train_starts) >= 2:
-            assert train_starts[1] == 1
+        assert len(train_starts) == 2
+        # empty file (doc_000) contributes exactly 1 EOT token, so second doc starts at 1
+        assert train_starts[0] == 0
+        assert train_starts[1] == 1
