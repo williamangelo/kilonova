@@ -1,9 +1,9 @@
-"""DataLoader components for streaming token data."""
+"""DataLoader components for token data."""
 
-from .streaming import StreamingTokenDataset
+from .dataset import TokenDataset
 from .factory import create_dataloaders
 
 __all__ = [
-    "StreamingTokenDataset",
+    "TokenDataset",
     "create_dataloaders",
 ]

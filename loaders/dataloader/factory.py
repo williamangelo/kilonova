@@ -6,23 +6,17 @@ import json
 import logging
 from pathlib import Path
 
+import torch
 from torch.utils.data import DataLoader
 
-from .streaming import StreamingTokenDataset
+from .dataset import TokenDataset
 
 
 logger = logging.getLogger(__name__)
 
 
 def load_meta(data_dir: str | Path) -> dict:
-    """Load metadata from a preprocessed dataset directory.
-
-    Args:
-        data_dir: Directory containing train.bin, val.bin, and metadata.json
-
-    Returns:
-        Dictionary with dataset metadata
-    """
+    """Load metadata from a preprocessed dataset directory."""
     meta_path = Path(data_dir) / "metadata.json"
     if not meta_path.exists():
         raise FileNotFoundError(
@@ -55,7 +49,7 @@ def create_dataloaders(
         stride: Step size between sequences (default: max_length)
         max_tokens: Maximum number of tokens to use (for small runs)
         data_fraction: Fraction of data to use (alternative to max_tokens)
-        shuffle: Whether to shuffle data each epoch
+        shuffle: Whether to shuffle training data each epoch
         num_workers: Number of DataLoader workers (0 for main process)
         drop_last: Whether to drop incomplete final batch
         seed: Random seed for reproducibility
@@ -96,23 +90,18 @@ def create_dataloaders(
     else:
         val_max_tokens = None
 
-    # Create datasets
-    train_dataset = StreamingTokenDataset(
+    train_dataset = TokenDataset(
         bin_path=train_path,
         max_length=max_length,
         stride=stride,
         max_tokens=max_tokens,
-        shuffle_chunks=shuffle,
-        seed=seed,
     )
 
-    val_dataset = StreamingTokenDataset(
+    val_dataset = TokenDataset(
         bin_path=val_path,
         max_length=max_length,
         stride=stride,
         max_tokens=val_max_tokens,
-        shuffle_chunks=False,  # don't shuffle validation
-        seed=seed,
     )
 
     logger.info(f"Loaded preprocessed data from {data_dir}")
@@ -123,23 +112,18 @@ def create_dataloaders(
     elif max_tokens:
         logger.info(f"Token limit: {max_tokens:,} tokens")
 
-    # note on macOS multiprocessing:
-    # macOS has known issues with PyTorch's default fork() multiprocessing context.
-    # symptoms: workers hang/deadlock, especially with memory-mapped files.
-    # workarounds:
-    #   1. use num_workers=0 (current default on macOS via config.py)
-    #   2. use multiprocessing_context='spawn' instead of 'fork'
-    #      (requires setting: multiprocessing_context='spawn' in DataLoader)
-    #   3. use threading instead of multiprocessing (not implemented)
-    # for production on macOS, consider implementing option 2 for better throughput.
+    generator = torch.Generator().manual_seed(seed)
 
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
-        shuffle=False,  # shuffling handled by dataset
+        shuffle=shuffle,
         drop_last=drop_last,
         num_workers=num_workers,
+        pin_memory=torch.cuda.is_available(),
+        prefetch_factor=2 if num_workers > 0 else None,
         persistent_workers=(num_workers > 0),
+        generator=generator,
     )
 
     val_loader = DataLoader(
@@ -148,6 +132,8 @@ def create_dataloaders(
         shuffle=False,
         drop_last=False,
         num_workers=num_workers,
+        pin_memory=torch.cuda.is_available(),
+        prefetch_factor=2 if num_workers > 0 else None,
         persistent_workers=(num_workers > 0),
     )
 

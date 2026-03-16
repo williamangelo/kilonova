@@ -109,3 +109,74 @@ class TestTokenDatasetGetItem:
         inp1, _ = ds[1]
         # sample 0: [0,1,2,3,4], sample 1: [2,3,4,5,6] — overlap is [2,3,4]
         assert inp0.tolist()[2:] == inp1.tolist()[:3]
+
+
+from loaders.dataloader.factory import create_dataloaders
+
+
+def _create_train_val_bins(path: Path, train_tokens: list[int], val_tokens: list[int], dtype: str = "uint16"):
+    """helper: write train.bin, val.bin, and metadata.json."""
+    np_dtype = np.uint16 if dtype == "uint16" else np.uint32
+
+    train_arr = np.array(train_tokens, dtype=np_dtype)
+    (path / "train.bin").open("wb").write(train_arr.tobytes())
+
+    val_arr = np.array(val_tokens, dtype=np_dtype)
+    (path / "val.bin").open("wb").write(val_arr.tobytes())
+
+    meta = {
+        "train_tokens": len(train_tokens),
+        "val_tokens": len(val_tokens),
+        "total_tokens": len(train_tokens) + len(val_tokens),
+        "vocab_size": 50257,
+        "tokenizer": "gpt2",
+        "dtype": dtype,
+        "train_ratio": 0.85,
+        "source_files": 1,
+        "source_dir": str(path),
+        "created": "2026-01-01T00:00:00+00:00",
+    }
+    with open(path / "metadata.json", "w") as f:
+        json.dump(meta, f)
+
+
+class TestCreateDataloaders:
+    """test budget splitting logic in create_dataloaders."""
+
+    def test_data_fraction_applied_independently(self, tmp_path):
+        """data_fraction should apply independently to train and val."""
+        train_toks = list(range(1000))
+        val_toks = list(range(200))
+        _create_train_val_bins(tmp_path, train_toks, val_toks)
+
+        train_loader, val_loader = create_dataloaders(
+            data_dir=tmp_path,
+            batch_size=1,
+            max_length=10,
+            data_fraction=0.5,
+        )
+
+        # data_fraction=0.5 → train uses 500 tokens, val uses 100 tokens
+        # train: (500 - 10 - 1) // 10 + 1 = 49
+        # val: (100 - 10 - 1) // 10 + 1 = 9
+        assert len(train_loader.dataset) == 49
+        assert len(val_loader.dataset) == 9
+
+    def test_max_tokens_split_by_ratio(self, tmp_path):
+        """max_tokens should split by original train/val ratio."""
+        train_toks = list(range(850))
+        val_toks = list(range(150))
+        _create_train_val_bins(tmp_path, train_toks, val_toks)
+
+        train_loader, val_loader = create_dataloaders(
+            data_dir=tmp_path,
+            batch_size=1,
+            max_length=10,
+            max_tokens=100,
+        )
+
+        # total=1000, train_ratio=850/1000=0.85, val_ratio=0.15
+        # train budget: int(100 * 0.85) = 85 tokens → (85 - 10 - 1) // 10 + 1 = 8
+        # val budget: int(100 * 0.15) = 15 tokens → (15 - 10 - 1) // 10 + 1 = 1
+        assert len(train_loader.dataset) == 8
+        assert len(val_loader.dataset) == 1
