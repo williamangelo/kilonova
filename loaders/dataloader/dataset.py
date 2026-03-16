@@ -61,6 +61,8 @@ class TokenDataset(Dataset):
         return self.num_samples
 
     def __getitem__(self, idx):
+        if idx < 0 or idx >= self.num_samples:
+            raise IndexError(f"index {idx} out of range for dataset of size {self.num_samples}")
         start = idx * self.stride
         input_tokens = np.array(self.tokens[start:start + self.max_length], dtype=np.int64)
         target_tokens = np.array(self.tokens[start + 1:start + self.max_length + 1], dtype=np.int64)
