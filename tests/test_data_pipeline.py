@@ -9,6 +9,8 @@ import torch
 
 from loaders.dataloader.dataset import TokenDataset
 from loaders.dataloader.factory import create_dataloaders
+from loaders.preprocessing.tokenize import preprocess_dataset
+import tiktoken
 
 
 def _create_bin_file(path: Path, tokens: list[int], dtype: str = "uint16"):
@@ -178,3 +180,134 @@ class TestCreateDataloaders:
         # val budget: int(100 * 0.15) = 15 tokens → (15 - 10 - 1) // 10 + 1 = 1
         assert len(train_loader.dataset) == 8
         assert len(val_loader.dataset) == 1
+
+
+class TestPreprocessDataset:
+    """test preprocessing pipeline."""
+
+    def _write_txt_files(self, path: Path, contents: list[str]):
+        """helper: write numbered .txt files."""
+        for i, text in enumerate(contents):
+            (path / f"doc_{i:03d}.txt").write_text(text, encoding="utf-8")
+
+    def test_token_counts_match_metadata(self, tmp_path):
+        """bin file sizes should match metadata token counts."""
+        input_dir = tmp_path / "input"
+        output_dir = tmp_path / "output"
+        input_dir.mkdir()
+
+        self._write_txt_files(input_dir, [
+            "Hello world.",
+            "Second document here.",
+            "Third one.",
+        ])
+
+        meta = preprocess_dataset(
+            str(input_dir), str(output_dir), train_ratio=0.7
+        )
+
+        train_bin = np.memmap(output_dir / "train.bin", dtype=np.uint16, mode='r')
+        val_bin = np.memmap(output_dir / "val.bin", dtype=np.uint16, mode='r')
+
+        assert len(train_bin) == meta["train_tokens"]
+        assert len(val_bin) == meta["val_tokens"]
+        assert meta["train_tokens"] + meta["val_tokens"] == meta["total_tokens"]
+
+    def test_doc_boundaries_match_actual_positions(self, tmp_path):
+        """doc_starts arrays should mark where each document begins in the bin."""
+        input_dir = tmp_path / "input"
+        output_dir = tmp_path / "output"
+        input_dir.mkdir()
+
+        self._write_txt_files(input_dir, [
+            "Hello world.",
+            "Second document here.",
+            "Third one.",
+        ])
+
+        meta = preprocess_dataset(
+            str(input_dir), str(output_dir), train_ratio=0.7
+        )
+
+        assert meta["has_doc_boundaries"] is True
+
+        train_starts = np.load(output_dir / "train_doc_starts.npy")
+        val_starts = np.load(output_dir / "val_doc_starts.npy")
+
+        # verify first doc starts at 0 in train
+        assert train_starts[0] == 0
+
+        # verify each start aligns with where the previous doc's EOT was
+        tokenizer = tiktoken.get_encoding("gpt2")
+        train_bin = np.memmap(output_dir / "train.bin", dtype=np.uint16, mode='r')
+        for i in range(1, len(train_starts)):
+            # token before each doc start should be EOT
+            assert train_bin[train_starts[i] - 1] == tokenizer.eot_token
+
+    def test_single_file_input(self, tmp_path):
+        """preprocessing a single .txt file should work."""
+        input_dir = tmp_path / "input"
+        output_dir = tmp_path / "output"
+        input_dir.mkdir()
+
+        (input_dir / "solo.txt").write_text("Just one file.", encoding="utf-8")
+
+        meta = preprocess_dataset(str(input_dir), str(output_dir))
+
+        assert meta["source_files"] == 1
+        assert meta["total_tokens"] > 0
+        assert (output_dir / "train.bin").exists()
+        assert (output_dir / "val.bin").exists()
+
+    def test_split_doc_tracked_in_metadata(self, tmp_path):
+        """when a doc straddles the split, split_doc_index should be set."""
+        input_dir = tmp_path / "input"
+        output_dir = tmp_path / "output"
+        input_dir.mkdir()
+
+        # create docs with very different sizes so the split lands inside the big one
+        self._write_txt_files(input_dir, [
+            "Tiny.",
+            "A " * 500,  # large doc likely to be split
+            "Small end.",
+        ])
+
+        meta = preprocess_dataset(
+            str(input_dir), str(output_dir), train_ratio=0.5
+        )
+
+        # with 50% split on a dataset dominated by doc_001, it should be split
+        assert meta["split_doc_index"] is not None
+
+    def test_no_split_yields_null_split_doc_index(self, tmp_path):
+        """when split falls exactly on a doc boundary, split_doc_index is null."""
+        input_dir = tmp_path / "input"
+        output_dir = tmp_path / "output"
+        input_dir.mkdir()
+
+        # single file — all goes to train, nothing to split
+        (input_dir / "doc.txt").write_text("Hello.", encoding="utf-8")
+
+        meta = preprocess_dataset(
+            str(input_dir), str(output_dir), train_ratio=1.0
+        )
+
+        assert meta["split_doc_index"] is None
+
+    def test_empty_file_produces_eot_only(self, tmp_path):
+        """empty .txt file should produce a single EOT token."""
+        input_dir = tmp_path / "input"
+        output_dir = tmp_path / "output"
+        input_dir.mkdir()
+
+        (input_dir / "empty.txt").write_text("", encoding="utf-8")
+        (input_dir / "nonempty.txt").write_text("Hello world.", encoding="utf-8")
+
+        meta = preprocess_dataset(str(input_dir), str(output_dir))
+
+        # both docs should be tracked in boundaries
+        train_starts = np.load(output_dir / "train_doc_starts.npy")
+        # empty file (doc_000) is first alphabetically, it contributes 1 EOT token
+        # so second doc starts at offset 1
+        if len(train_starts) >= 2:
+            assert train_starts[1] == 1

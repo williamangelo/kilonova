@@ -94,6 +94,8 @@ def _write_metadata(
     train_ratio: float,
     num_files: int,
     input_path: Path,
+    has_doc_boundaries: bool = False,
+    split_doc_index: int | None = None,
 ) -> dict:
     """Write metadata JSON file.
 
@@ -107,6 +109,8 @@ def _write_metadata(
         train_ratio: Training split ratio
         num_files: Number of source files
         input_path: Input directory path
+        has_doc_boundaries: Whether doc boundary .npy files were written
+        split_doc_index: 0-based file index of the document split between train/val, or None
 
     Returns:
         Dictionary with metadata
@@ -124,6 +128,8 @@ def _write_metadata(
         "source_files": num_files,
         "source_dir": str(input_path.absolute()),
         "created": datetime.now(timezone.utc).isoformat(),
+        "has_doc_boundaries": has_doc_boundaries,
+        "split_doc_index": split_doc_index,
     }
 
     meta_path = output_path / "metadata.json"
@@ -214,15 +220,21 @@ def preprocess_dataset(
     val_tokens = 0
     tokens_written = 0
 
+    # document boundary tracking
+    train_doc_starts = []
+    val_doc_starts = []
+    split_doc_index = None
+
     logger.info("Writing tokenized data...")
     with open(train_path, 'wb') as f_train, open(val_path, 'wb') as f_val:
         with tqdm(total=total_size, unit='B', unit_scale=True, desc="Pass 2/2") as pbar:
-            for file_path in txt_files:
+            for file_idx, file_path in enumerate(txt_files):
                 file_size = file_path.stat().st_size
                 tokens = _tokenize_file(file_path, tokenizer)
 
                 if tokens_written + len(tokens) <= split_idx:
                     # all tokens go to train
+                    train_doc_starts.append(train_tokens)
                     arr = np.array(tokens, dtype=dtype)
                     arr.tofile(f_train)
                     train_tokens += len(arr)
@@ -230,6 +242,7 @@ def preprocess_dataset(
                     del arr
                 elif tokens_written >= split_idx:
                     # all tokens go to val
+                    val_doc_starts.append(val_tokens)
                     arr = np.array(tokens, dtype=dtype)
                     arr.tofile(f_val)
                     val_tokens += len(arr)
@@ -237,12 +250,16 @@ def preprocess_dataset(
                     del arr
                 else:
                     # need to split this file between train and val
+                    split_doc_index = file_idx
                     remaining_train = split_idx - tokens_written
+
+                    train_doc_starts.append(train_tokens)
                     train_arr = np.array(tokens[:remaining_train], dtype=dtype)
                     train_arr.tofile(f_train)
                     train_tokens += len(train_arr)
                     del train_arr
 
+                    val_doc_starts.append(val_tokens)
                     val_arr = np.array(tokens[remaining_train:], dtype=dtype)
                     val_arr.tofile(f_val)
                     val_tokens += len(val_arr)
@@ -252,6 +269,10 @@ def preprocess_dataset(
 
                 del tokens
                 pbar.update(file_size)
+
+    # save document boundary indices
+    np.save(output_path / "train_doc_starts.npy", np.array(train_doc_starts, dtype=np.int64))
+    np.save(output_path / "val_doc_starts.npy", np.array(val_doc_starts, dtype=np.int64))
 
     # write metadata
     meta = _write_metadata(
@@ -264,6 +285,8 @@ def preprocess_dataset(
         train_ratio,
         len(txt_files),
         input_path,
+        has_doc_boundaries=True,
+        split_doc_index=split_doc_index,
     )
 
     # log summary
