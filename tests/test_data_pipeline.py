@@ -8,6 +8,7 @@ import pytest
 import torch
 
 from loaders.dataloader.dataset import TokenDataset
+from loaders.dataloader.factory import create_dataloaders
 
 
 def _create_bin_file(path: Path, tokens: list[int], dtype: str = "uint16"):
@@ -109,9 +110,6 @@ class TestTokenDatasetGetItem:
         inp1, _ = ds[1]
         # sample 0: [0,1,2,3,4], sample 1: [2,3,4,5,6] — overlap is [2,3,4]
         assert inp0.tolist()[2:] == inp1.tolist()[:3]
-
-
-from loaders.dataloader.factory import create_dataloaders
 
 
 def _create_train_val_bins(path: Path, train_tokens: list[int], val_tokens: list[int], dtype: str = "uint16"):

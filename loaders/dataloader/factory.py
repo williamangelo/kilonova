@@ -123,7 +123,7 @@ def create_dataloaders(
         pin_memory=torch.cuda.is_available(),
         prefetch_factor=2 if num_workers > 0 else None,
         persistent_workers=(num_workers > 0),
-        generator=generator,
+        generator=generator,  # val loader uses shuffle=False, no generator needed
     )
 
     val_loader = DataLoader(
