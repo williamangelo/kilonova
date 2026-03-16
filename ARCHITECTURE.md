@@ -12,7 +12,7 @@ loaders/                   # data pipeline
 ├── preprocessing/         #   tokenization to memory-mapped binary
 │   └── tokenize.py        #   two-pass streaming: count tokens, then write train/val splits
 └── dataloader/            #   training data loading
-    ├── streaming.py        #   StreamingTokenDataset (numpy memmap, zero-copy)
+    ├── dataset.py          #   TokenDataset (map-style, numpy memmap)
     └── factory.py          #   create_dataloaders() with token budgets
 
 models/                    # model system
@@ -78,9 +78,9 @@ Path conventions are enforced by [`osmium/utils/paths.py`](osmium/utils/paths.py
 
 [`osmium/train/config.py`](osmium/train/config.py) resolves training configuration in layers: hardcoded defaults → YAML file → CLI flags. Platform-aware defaults handle mixed precision (auto-enabled on CUDA, disabled on CPU/MPS), `torch.compile` (on by default), and dataloader workers (forced to 0 on macOS due to fork issues).
 
-### Streaming token dataset
+### Memory-mapped token dataset
 
-[`loaders/dataloader/streaming.py`](loaders/dataloader/streaming.py) uses numpy `memmap` for zero-copy access to tokenized data. Only accessed pages load into memory, so datasets can exceed RAM. The preprocessing step ([`loaders/preprocessing/tokenize.py`](loaders/preprocessing/tokenize.py)) uses a two-pass approach: count tokens first, then write with exact split ratios.
+[`loaders/dataloader/dataset.py`](loaders/dataloader/dataset.py) is a map-style `Dataset` backed by numpy `memmap` for zero-copy random access to tokenized data. Only accessed pages load into memory, so datasets can exceed RAM. The DataLoader handles shuffling and worker partitioning natively. The preprocessing step ([`loaders/preprocessing/tokenize.py`](loaders/preprocessing/tokenize.py)) uses a two-pass approach: count tokens first, then write with exact split ratios. Document boundary indices are stored as `.npy` sidecar files for analysis.
 
 ## Extension Points
 
