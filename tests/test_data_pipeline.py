@@ -1,0 +1,111 @@
+"""Tests for data preprocessing and loading pipeline."""
+
+import json
+from pathlib import Path
+
+import numpy as np
+import pytest
+import torch
+
+from loaders.dataloader.dataset import TokenDataset
+
+
+def _create_bin_file(path: Path, tokens: list[int], dtype: str = "uint16"):
+    """helper: write tokens to a .bin file with metadata.json."""
+    np_dtype = np.uint16 if dtype == "uint16" else np.uint32
+    arr = np.array(tokens, dtype=np_dtype)
+    bin_path = path / "train.bin"
+    arr.tofile(bin_path)
+
+    meta = {
+        "train_tokens": len(tokens),
+        "val_tokens": 0,
+        "total_tokens": len(tokens),
+        "vocab_size": 50257,
+        "tokenizer": "gpt2",
+        "dtype": dtype,
+        "train_ratio": 1.0,
+        "source_files": 1,
+        "source_dir": str(path),
+        "created": "2026-01-01T00:00:00+00:00",
+    }
+    with open(path / "metadata.json", "w") as f:
+        json.dump(meta, f)
+
+    return bin_path
+
+
+class TestTokenDatasetNumSamples:
+    """test num_samples calculation for various token/length/stride combos."""
+
+    def test_exact_fit(self, tmp_path):
+        """11 tokens, max_length=5, stride=5 → 2 samples (each needs 6 tokens)."""
+        bin_path = _create_bin_file(tmp_path, list(range(11)))
+        ds = TokenDataset(bin_path, max_length=5)
+        assert len(ds) == 2
+
+    def test_tokens_left_over(self, tmp_path):
+        """14 tokens, max_length=5, stride=5 → 2 samples (remainder too small)."""
+        bin_path = _create_bin_file(tmp_path, list(range(14)))
+        ds = TokenDataset(bin_path, max_length=5)
+        assert len(ds) == 2
+
+    def test_stride_less_than_max_length(self, tmp_path):
+        """11 tokens, max_length=5, stride=2 → 3 samples."""
+        bin_path = _create_bin_file(tmp_path, list(range(11)))
+        ds = TokenDataset(bin_path, max_length=5, stride=2)
+        # starts: 0, 2, 4. start=4 needs tokens[4:10], valid since 10 < 11. start=6 needs tokens[6:12], invalid.
+        assert len(ds) == 3
+
+    def test_too_few_tokens(self, tmp_path):
+        """5 tokens with max_length=5 → 0 samples (need 6)."""
+        bin_path = _create_bin_file(tmp_path, list(range(5)))
+        ds = TokenDataset(bin_path, max_length=5)
+        assert len(ds) == 0
+
+    def test_exactly_one_sample(self, tmp_path):
+        """6 tokens with max_length=5 → exactly 1 sample."""
+        bin_path = _create_bin_file(tmp_path, list(range(6)))
+        ds = TokenDataset(bin_path, max_length=5)
+        assert len(ds) == 1
+
+    def test_max_tokens_reduces_samples(self, tmp_path):
+        """100 tokens but max_tokens=11, max_length=5 → 2 samples."""
+        bin_path = _create_bin_file(tmp_path, list(range(100)))
+        ds = TokenDataset(bin_path, max_length=5, max_tokens=11)
+        assert len(ds) == 2
+
+
+class TestTokenDatasetGetItem:
+    """test __getitem__ slicing and shift logic."""
+
+    def test_target_shifted_by_one(self, tmp_path):
+        """target should be input shifted right by 1."""
+        tokens = list(range(20))
+        bin_path = _create_bin_file(tmp_path, tokens)
+        ds = TokenDataset(bin_path, max_length=5)
+
+        inp, tgt = ds[0]
+        assert inp.tolist() == [0, 1, 2, 3, 4]
+        assert tgt.tolist() == [1, 2, 3, 4, 5]
+
+    def test_second_sample_offset_by_stride(self, tmp_path):
+        """second sample starts at stride offset."""
+        tokens = list(range(20))
+        bin_path = _create_bin_file(tmp_path, tokens)
+        ds = TokenDataset(bin_path, max_length=5)  # stride defaults to 5
+
+        inp, tgt = ds[1]
+        assert inp.tolist() == [5, 6, 7, 8, 9]
+        assert tgt.tolist() == [6, 7, 8, 9, 10]
+
+    def test_overlapping_stride(self, tmp_path):
+        """with stride=2, consecutive samples overlap by max_length-stride tokens."""
+        tokens = list(range(20))
+        bin_path = _create_bin_file(tmp_path, tokens)
+        ds = TokenDataset(bin_path, max_length=5, stride=2)
+
+        inp0, _ = ds[0]
+        inp1, _ = ds[1]
+        # sample 0: [0,1,2,3,4], sample 1: [2,3,4,5,6] — overlap is [2,3,4]
+        assert inp0.tolist()[2:] == inp1.tolist()[:3]
