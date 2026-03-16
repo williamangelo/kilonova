@@ -15,7 +15,7 @@ from osmium.commands.info import info_cmd
 from osmium.commands.list_cmd import list_datasets_cmd, list_models_cmd
 from osmium.commands.preprocess import preprocess_data
 from osmium.commands.train import train_model
-from models.registry import MODEL_REGISTRY
+from models.architectures import MODEL_REGISTRY
 
 
 def _warn(message: str) -> None:

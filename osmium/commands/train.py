@@ -7,7 +7,7 @@ from typing import Any
 
 import click
 
-from models.registry import is_registered as is_model_registered, list_models
+from models.architectures import is_registered as is_model_registered, list_models
 from osmium.train.config import TrainConfig
 from osmium.train.runner import run_training
 from osmium.utils import PathResolver
