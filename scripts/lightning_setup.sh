@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-REPO_URL="https://github.com/wgoodall01/osmium"
+REPO_URL="https://github.com/williamangelo/osmium"
 INSTALL_DIR="$HOME/osmium"
 
 # 1. install uv if not already present
