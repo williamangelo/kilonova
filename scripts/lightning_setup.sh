@@ -19,7 +19,7 @@ if ! command -v uv &>/dev/null; then
     echo "installing uv..."
     curl -LsSf https://astral.sh/uv/install.sh | sh
     # add uv to PATH for the rest of this script
-    export PATH="$HOME/.cargo/bin:$PATH"
+    export PATH="$HOME/.local/bin:$PATH"
 fi
 
 echo "uv $(uv --version)"
