@@ -9,14 +9,10 @@ Usage:
 """
 
 import argparse
-import json
 import logging
 import re
-from datetime import datetime, timezone
 from pathlib import Path
 
-import numpy as np
-import tiktoken
 from datasets import load_dataset, load_from_disk
 from tqdm import tqdm
 
@@ -86,88 +82,25 @@ def tokenize(train_ratio: float = 0.85):
     if not CLEAN_DIR.exists():
         raise FileNotFoundError(f"Clean data not found at {CLEAN_DIR}. Run clean first.")
 
-    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-
-    tokenizer = tiktoken.get_encoding("gpt2")
-    vocab_size = tokenizer.n_vocab
-    dtype = np.uint16 if vocab_size <= 65535 else np.uint32
-    dtype_name = "uint16" if vocab_size <= 65535 else "uint32"
-
-    logger.info(f"Tokenizer: gpt2 (vocab: {vocab_size}), dtype: {dtype_name}")
-    logger.info(f"Train/val split: {train_ratio:.0%}/{1-train_ratio:.0%}")
-
-    # load cleaned dataset
-    dataset = load_from_disk(str(CLEAN_DIR))
-
-    # first pass: count tokens
-    logger.info("Pass 1/2: counting tokens...")
-    total_tokens = 0
-    for example in tqdm(dataset, desc="Counting"):
-        text = example.get("text", "")
-        tokens = tokenizer.encode(text, allowed_special={"<|endoftext|>"})
-        total_tokens += len(tokens) + 1  # +1 for EOT
-
-    logger.info(f"Total tokens: {total_tokens:,}")
-    split_idx = int(train_ratio * total_tokens)
-    logger.info(f"Train: {split_idx:,}, Val: {total_tokens - split_idx:,}")
-
-    # second pass: write binary files
-    logger.info("Pass 2/2: writing tokenized data...")
-    train_path = PROCESSED_DIR / "train.bin"
-    val_path = PROCESSED_DIR / "val.bin"
-
-    train_tokens = 0
-    val_tokens = 0
-    tokens_written = 0
-
-    with open(train_path, "wb") as f_train, open(val_path, "wb") as f_val:
-        for example in tqdm(dataset, desc="Writing"):
+    # export cleaned HF dataset to .txt files for preprocessing
+    txt_dir = CLEAN_DIR / "txt"
+    if not txt_dir.exists():
+        logger.info("Exporting cleaned dataset to .txt files...")
+        dataset = load_from_disk(str(CLEAN_DIR))
+        txt_dir.mkdir(parents=True, exist_ok=True)
+        for i, example in enumerate(tqdm(dataset, desc="Exporting")):
             text = example.get("text", "")
-            tokens = tokenizer.encode(text, allowed_special={"<|endoftext|>"})
-            tokens.append(tokenizer.eot_token)
+            if text.strip():
+                (txt_dir / f"doc_{i:06d}.txt").write_text(text, encoding="utf-8")
+        logger.info(f"Exported {i+1} documents to {txt_dir}")
 
-            if tokens_written + len(tokens) <= split_idx:
-                arr = np.array(tokens, dtype=dtype)
-                arr.tofile(f_train)
-                train_tokens += len(arr)
-                tokens_written += len(arr)
-            elif tokens_written >= split_idx:
-                arr = np.array(tokens, dtype=dtype)
-                arr.tofile(f_val)
-                val_tokens += len(arr)
-                tokens_written += len(arr)
-            else:
-                # split this document
-                remaining_train = split_idx - tokens_written
-                train_arr = np.array(tokens[:remaining_train], dtype=dtype)
-                train_arr.tofile(f_train)
-                train_tokens += len(train_arr)
-
-                val_arr = np.array(tokens[remaining_train:], dtype=dtype)
-                val_arr.tofile(f_val)
-                val_tokens += len(val_arr)
-
-                tokens_written += len(tokens)
-
-    # write metadata
-    meta = {
-        "train_tokens": train_tokens,
-        "val_tokens": val_tokens,
-        "total_tokens": train_tokens + val_tokens,
-        "vocab_size": vocab_size,
-        "tokenizer": "gpt2",
-        "dtype": dtype_name,
-        "train_ratio": train_ratio,
-        "source": HF_SOURCE,
-        "created": datetime.now(timezone.utc).isoformat(),
-    }
-    with open(PROCESSED_DIR / "metadata.json", "w") as f:
-        json.dump(meta, f, indent=2)
-
-    train_mb = train_path.stat().st_size / (1024**2)
-    val_mb = val_path.stat().st_size / (1024**2)
-    logger.info(f"train.bin: {train_mb:.1f} MB, val.bin: {val_mb:.1f} MB")
-    logger.info("Done.")
+    from kilonova.preprocessing import preprocess_dataset
+    preprocess_dataset(
+        input_dir=str(txt_dir),
+        output_dir=str(PROCESSED_DIR),
+        tokenizer_name="gpt2",
+        train_ratio=train_ratio,
+    )
 
 
 def main():
