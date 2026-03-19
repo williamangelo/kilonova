@@ -7,8 +7,7 @@ import numpy as np
 import pytest
 import torch
 
-from loaders.dataloader.dataset import TokenDataset
-from loaders.dataloader.factory import create_dataloaders
+from kilonova.data import TokenDataset, create_dataloaders
 from loaders.preprocessing.tokenize import preprocess_dataset
 import tiktoken
 
