@@ -90,13 +90,7 @@ def create_dataloaders(
     data_dir: str | Path,
     batch_size: int,
     max_length: int,
-    stride: int | None = None,
-    max_tokens: int | None = None,
     data_fraction: float | None = None,
-    shuffle: bool = True,
-    num_workers: int = 0,
-    drop_last: bool = True,
-    seed: int = 42,
 ) -> tuple[DataLoader, DataLoader]:
     """Create training and validation DataLoaders from preprocessed data.
 
@@ -104,13 +98,7 @@ def create_dataloaders(
         data_dir: Directory containing train.bin, val.bin, and metadata.json
         batch_size: Batch size for training
         max_length: Context window size (sequence length)
-        stride: Step size between sequences (default: max_length)
-        max_tokens: Maximum number of tokens to use (for small runs)
-        data_fraction: Fraction of data to use (alternative to max_tokens)
-        shuffle: Whether to shuffle training data each epoch
-        num_workers: Number of DataLoader workers (0 for main process)
-        drop_last: Whether to drop incomplete final batch
-        seed: Random seed for reproducibility
+        data_fraction: Fraction of data to use (optional)
 
     Returns:
         Tuple of (train_loader, val_loader)
@@ -133,32 +121,22 @@ def create_dataloaders(
     meta = load_meta(data_dir)
 
     # calculate max_tokens from data_fraction if specified
-    if data_fraction is not None and max_tokens is None:
+    if data_fraction is not None:
         max_tokens = int(meta["train_tokens"] * data_fraction)
         val_max_tokens = int(meta["val_tokens"] * data_fraction)
-    elif max_tokens is not None:
-        # treat max_tokens as total budget and split according to original train/val ratio
-        total_tokens = meta["train_tokens"] + meta["val_tokens"]
-        train_ratio = meta["train_tokens"] / total_tokens
-        val_ratio = meta["val_tokens"] / total_tokens
-
-        total_budget = max_tokens
-        max_tokens = int(total_budget * train_ratio)
-        val_max_tokens = int(total_budget * val_ratio)
     else:
+        max_tokens = None
         val_max_tokens = None
 
     train_dataset = TokenDataset(
         bin_path=train_path,
         max_length=max_length,
-        stride=stride,
         max_tokens=max_tokens,
     )
 
     val_dataset = TokenDataset(
         bin_path=val_path,
         max_length=max_length,
-        stride=stride,
         max_tokens=val_max_tokens,
     )
 
@@ -168,18 +146,16 @@ def create_dataloaders(
     if max_tokens and val_max_tokens:
         logger.info(f"Token limit: {max_tokens:,} train, {val_max_tokens:,} val ({max_tokens + val_max_tokens:,} total)")
 
-    generator = torch.Generator().manual_seed(seed)
+    generator = torch.Generator().manual_seed(42)
 
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
-        shuffle=shuffle,
-        drop_last=drop_last,
-        num_workers=num_workers,
+        shuffle=True,
+        drop_last=True,
+        num_workers=0,
         pin_memory=torch.cuda.is_available(),
-        prefetch_factor=2 if num_workers > 0 else None,
-        persistent_workers=(num_workers > 0),
-        generator=generator,  # val loader uses shuffle=False, no generator needed
+        generator=generator,
     )
 
     val_loader = DataLoader(
@@ -187,10 +163,8 @@ def create_dataloaders(
         batch_size=batch_size,
         shuffle=False,
         drop_last=False,
-        num_workers=num_workers,
+        num_workers=0,
         pin_memory=torch.cuda.is_available(),
-        prefetch_factor=2 if num_workers > 0 else None,
-        persistent_workers=(num_workers > 0),
     )
 
     return train_loader, val_loader

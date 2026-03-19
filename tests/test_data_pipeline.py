@@ -161,24 +161,6 @@ class TestCreateDataloaders:
         assert len(train_loader.dataset) == 49
         assert len(val_loader.dataset) == 9
 
-    def test_max_tokens_split_by_ratio(self, tmp_path):
-        """max_tokens should split by original train/val ratio."""
-        train_toks = list(range(850))
-        val_toks = list(range(150))
-        _create_train_val_bins(tmp_path, train_toks, val_toks)
-
-        train_loader, val_loader = create_dataloaders(
-            data_dir=tmp_path,
-            batch_size=1,
-            max_length=10,
-            max_tokens=100,
-        )
-
-        # total=1000, train_ratio=850/1000=0.85, val_ratio=0.15
-        # train budget: int(100 * 0.85) = 85 tokens → (85 - 10 - 1) // 10 + 1 = 8
-        # val budget: int(100 * 0.15) = 15 tokens → (15 - 10 - 1) // 10 + 1 = 1
-        assert len(train_loader.dataset) == 8
-        assert len(val_loader.dataset) == 1
 
 
 class TestPreprocessDataset:
