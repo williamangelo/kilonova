@@ -167,8 +167,6 @@ def create_dataloaders(
 
     if max_tokens and val_max_tokens:
         logger.info(f"Token limit: {max_tokens:,} train, {val_max_tokens:,} val ({max_tokens + val_max_tokens:,} total)")
-    elif max_tokens:
-        logger.info(f"Token limit: {max_tokens:,} tokens")
 
     generator = torch.Generator().manual_seed(seed)
 

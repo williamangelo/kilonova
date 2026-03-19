@@ -88,11 +88,13 @@ def tokenize(train_ratio: float = 0.85):
         logger.info("Exporting cleaned dataset to .txt files...")
         dataset = load_from_disk(str(CLEAN_DIR))
         txt_dir.mkdir(parents=True, exist_ok=True)
-        for i, example in enumerate(tqdm(dataset, desc="Exporting")):
+        count = 0
+        for example in tqdm(dataset, desc="Exporting"):
             text = example.get("text", "")
             if text.strip():
-                (txt_dir / f"doc_{i:06d}.txt").write_text(text, encoding="utf-8")
-        logger.info(f"Exported {i+1} documents to {txt_dir}")
+                (txt_dir / f"doc_{count:06d}.txt").write_text(text, encoding="utf-8")
+                count += 1
+        logger.info(f"Exported {count} documents to {txt_dir}")
 
     from kilonova.preprocessing import preprocess_dataset
     preprocess_dataset(
