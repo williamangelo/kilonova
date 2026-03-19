@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import click
 
@@ -13,40 +12,33 @@ from kilonova.commands.train import train_model
 from models.architectures import MODEL_REGISTRY
 
 
-def _warn(message: str) -> None:
-    """Emit a warning message via Click."""
-    click.secho(f"Warning: {message}", err=True, fg="yellow")
-
-
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option()
 def cli() -> None:
     """kilonova - unified CLI for training LLMs from scratch."""
 
 
-@cli.command(help="Train a model using preprocessed data. Defaults follow modern LLM training practices (single-epoch, checkpoint-based evaluation).")
+@cli.command(help="Train a model on preprocessed data.")
 @click.argument("architecture", type=click.Choice(tuple(MODEL_REGISTRY.keys())))
 @click.option("--data", required=True, help="Dataset name (uses data/processed/<dataset>/).")
-@click.option("--notes", type=str, default=None, help="Free-text annotation for this run.")
-@click.option("--max-tokens", type=int, default=None, help="Cap the number of tokens to use.")
-@click.option("--data-fraction", type=float, default=None, help="Fraction of data to consume (0-1).")
-@click.option("--epochs", type=click.IntRange(min=1), default=1, show_default=True, help="Training epochs.")
-@click.option("--batch-size", type=click.IntRange(min=1), default=2, show_default=True, help="Batch size per step.")
-@click.option("--learning-rate", type=float, default=0.0004, show_default=True, help="Optimizer learning rate.")
-@click.option("--patience", type=int, default=None, help="Early stopping patience (None=disabled, trains to completion).")
-@click.option("--eval-freq", type=click.IntRange(min=1), default=500, show_default=True, help="Eval frequency in steps.")
-@click.option("--eval-iter", type=click.IntRange(min=1), default=50, show_default=True, help="Batches to use for eval.")
-@click.option("--mixed-precision/--no-mixed-precision", default=None, help="Toggle fp16 mixed precision.")
-@click.option("--compile/--no-compile", "compile_model", default=None, help="Toggle torch.compile for speedups.")
-@click.option("--gradient-accumulation-steps", type=click.IntRange(min=1), default=4, show_default=True, help="Number of gradient accumulation steps.")
-@click.option("--device", type=click.Choice(["auto", "cuda", "cpu"]), default="auto", show_default=True, help="Device preference for training.")
-@click.option("--num-workers", type=click.IntRange(min=0), default=0, show_default=True, help="Number of dataloader workers.")
-@click.option("--max-grad-norm", type=float, default=1.0, show_default=True, help="Gradient clipping threshold (0 to disable).")
-@click.option("--warmup-steps", type=int, default=None, help="Override LR warmup steps.")
-@click.option("--min-lr", type=float, default=None, help="Minimum LR after cosine decay.")
-def train(architecture: str, data: str, notes: str | None, **kwargs: Any) -> None:
-    """Train a GPT model using preprocessed data."""
-    train_model(architecture, data, notes, kwargs)
+@click.option("--num-iterations", type=click.IntRange(min=1), default=1000, show_default=True, help="Total optimizer steps.")
+@click.option("--batch-size", type=click.IntRange(min=1), default=4, show_default=True, help="Batch size per step.")
+@click.option("--learning-rate", type=float, default=4e-4, show_default=True, help="Peak learning rate.")
+@click.option("--data-fraction", type=float, default=None, help="Fraction of data to use (0-1).")
+@click.option("--eval-every", type=int, default=250, show_default=True, help="Eval every N steps (-1 to disable).")
+@click.option("--device", type=click.Choice(["auto", "cuda", "cpu"]), default="auto", show_default=True, help="Device for training.")
+def train(architecture: str, data: str, num_iterations: int, batch_size: int, learning_rate: float, data_fraction: float | None, eval_every: int, device: str) -> None:
+    """Train a GPT model on preprocessed data."""
+    train_model(
+        architecture=architecture,
+        data=data,
+        num_iterations=num_iterations,
+        batch_size=batch_size,
+        learning_rate=learning_rate,
+        data_fraction=data_fraction,
+        eval_every=eval_every,
+        device=device,
+    )
 
 
 @cli.command(help="Evaluate a trained model.")
