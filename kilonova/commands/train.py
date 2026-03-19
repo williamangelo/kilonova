@@ -9,8 +9,7 @@ from pathlib import Path
 import click
 
 from models.architectures import is_registered as is_model_registered, list_models
-from kilonova.train.config import TrainConfig, resolve_device
-from kilonova.train.runner import run_training
+from kilonova.train import resolve_device, run_training
 
 
 def train_model(
@@ -18,6 +17,7 @@ def train_model(
     data: str,
     num_iterations: int,
     batch_size: int,
+    grad_accum_steps: int,
     learning_rate: float,
     data_fraction: float | None,
     eval_every: int,
@@ -50,24 +50,23 @@ def train_model(
     run_dir = Path("data/runs") / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    config = TrainConfig(
-        data_dir=data_dir,
-        run_dir=run_dir,
-        model=architecture,
-        num_iterations=num_iterations,
-        batch_size=batch_size,
-        learning_rate=learning_rate,
-        data_fraction=data_fraction,
-        eval_every=eval_every,
-        device=resolve_device(device),
-    )
-
     click.echo(f"\nTraining run: {run_id}")
     click.echo(f"Architecture: {architecture}")
     click.echo(f"Dataset: {data}")
     click.echo(f"Run directory: {run_dir}\n")
 
-    run_training(config)
+    run_training(
+        model_name=architecture,
+        data_dir=data_dir,
+        run_dir=run_dir,
+        device=resolve_device(device),
+        num_iterations=num_iterations,
+        batch_size=batch_size,
+        grad_accum_steps=grad_accum_steps,
+        learning_rate=learning_rate,
+        data_fraction=data_fraction,
+        eval_every=eval_every,
+    )
 
     click.secho(f"\n✓ Training complete: {run_id}", fg="green")
     click.echo(f"\nNext steps:")

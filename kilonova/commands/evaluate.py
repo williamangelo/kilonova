@@ -11,7 +11,7 @@ from kilonova.commands.generate import (
     generate_text,
     resolve_checkpoint,
 )
-from kilonova.train.config import resolve_device
+from kilonova.train import resolve_device
 
 
 # curated prompts for evaluation

@@ -8,7 +8,7 @@ import click
 import torch
 import tiktoken
 
-from kilonova.train.config import resolve_device
+from kilonova.train import resolve_device
 from models.architectures import get_architecture_class
 
 
