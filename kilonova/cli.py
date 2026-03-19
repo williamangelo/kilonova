@@ -7,13 +7,8 @@ from typing import Any
 
 import click
 
-from kilonova.commands.clean import clean_dataset
-from kilonova.commands.download import download_dataset
 from kilonova.commands.evaluate import evaluate_model as evaluate_model_impl
 from kilonova.commands.generate import generate_cmd
-from kilonova.commands.info import info_cmd
-from kilonova.commands.list_cmd import list_datasets_cmd, list_models_cmd
-from kilonova.commands.preprocess import preprocess_data
 from kilonova.commands.train import train_model
 from models.architectures import MODEL_REGISTRY
 
@@ -29,38 +24,10 @@ def cli() -> None:
     """kilonova - unified CLI for training LLMs from scratch."""
 
 
-@cli.command(help="Download a dataset.")
-@click.argument("dataset")
-@click.option("--output", type=click.Path(path_type=Path), help="Output directory (default: data/raw/<dataset>).")
-def download(dataset: str, output: Path | None) -> None:
-    """Download a dataset from the registry or HuggingFace."""
-    download_dataset(dataset, output)
-
-
-@cli.command(help="Clean a dataset using dataset-specific logic.")
-@click.argument("dataset")
-@click.option("--input", "input_dir", type=click.Path(path_type=Path), help="Input directory (default: data/raw/<dataset>).")
-@click.option("--output", type=click.Path(path_type=Path), help="Output directory (default: data/clean/<dataset>).")
-def clean(dataset: str, input_dir: Path | None, output: Path | None) -> None:
-    """Clean a dataset with dataset-specific or generic cleaning."""
-    clean_dataset(dataset, input_dir, output)
-
-
-@cli.command(help="Preprocess (tokenize) cleaned data.")
-@click.argument("dataset")
-@click.option("--input", "input_dir", type=click.Path(path_type=Path), help="Input directory (default: data/clean/<dataset>).")
-@click.option("--output", type=click.Path(path_type=Path), help="Output directory (default: data/processed/<dataset>).")
-@click.option("--train-split", type=float, default=0.95, show_default=True, help="Train/validation split ratio.")
-def preprocess(dataset: str, input_dir: Path | None, output: Path | None, train_split: float) -> None:
-    """Tokenize text files into binary format."""
-    preprocess_data(dataset, input_dir, output, train_split)
-
-
 @cli.command(help="Train a model using preprocessed data. Defaults follow modern LLM training practices (single-epoch, checkpoint-based evaluation).")
 @click.argument("architecture", type=click.Choice(tuple(MODEL_REGISTRY.keys())))
 @click.option("--data", required=True, help="Dataset name (uses data/processed/<dataset>/).")
-@click.option("--name", type=str, help="Experiment name (auto-generated from config filename if using --config).")
-@click.option("--config", type=click.Path(exists=True, path_type=Path), help="Load hyperparameters from YAML file.")
+@click.option("--notes", type=str, default=None, help="Free-text annotation for this run.")
 @click.option("--max-tokens", type=int, default=None, help="Cap the number of tokens to use.")
 @click.option("--data-fraction", type=float, default=None, help="Fraction of data to consume (0-1).")
 @click.option("--epochs", type=click.IntRange(min=1), default=1, show_default=True, help="Training epochs.")
@@ -77,9 +44,9 @@ def preprocess(dataset: str, input_dir: Path | None, output: Path | None, train_
 @click.option("--max-grad-norm", type=float, default=1.0, show_default=True, help="Gradient clipping threshold (0 to disable).")
 @click.option("--warmup-steps", type=int, default=None, help="Override LR warmup steps.")
 @click.option("--min-lr", type=float, default=None, help="Minimum LR after cosine decay.")
-def train(architecture: str, data: str, name: str | None, config: Path | None, **kwargs: Any) -> None:
+def train(architecture: str, data: str, notes: str | None, **kwargs: Any) -> None:
     """Train a GPT model using preprocessed data."""
-    train_model(architecture, data, name, config, kwargs)
+    train_model(architecture, data, notes, kwargs)
 
 
 @cli.command(help="Evaluate a trained model.")
@@ -104,30 +71,6 @@ def evaluate(model: str, device: str, output: Path | None, prompt: str | None) -
 def generate(model: str, prompt: str | None, interactive: bool, temp: float, max_tokens: int, top_k: int | None, top_p: float | None, device: str) -> None:
     """Interactive text generation from a trained model."""
     generate_cmd(model, prompt, interactive, temp, max_tokens, top_k, top_p, device)
-
-
-@cli.group(help="List available datasets or models.")
-def list() -> None:
-    """List resources (datasets, models)."""
-
-
-@list.command(name="datasets", help="Show available datasets and their status.")
-def list_datasets() -> None:
-    """List all available datasets."""
-    list_datasets_cmd()
-
-
-@list.command(name="models", help="Show training runs and checkpoints.")
-def list_models() -> None:
-    """List all trained models."""
-    list_models_cmd()
-
-
-@cli.command(help="Display detailed information about a dataset or model.")
-@click.argument("name")
-def info(name: str) -> None:
-    """Show detailed information about a dataset or model."""
-    info_cmd(name)
 
 
 def main() -> None:

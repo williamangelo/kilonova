@@ -8,7 +8,6 @@ import click
 import torch
 import tiktoken
 
-from kilonova.utils import PathResolver
 from kilonova.train.config import resolve_device
 from models.architectures import get_architecture_class
 
@@ -131,21 +130,19 @@ def generate_text(
 
 def resolve_checkpoint(model: str) -> Path:
     """resolve model name or path to checkpoint path"""
-    resolver = PathResolver()
     model_path = Path(model)
 
     if model_path.exists():
         return model_path
 
     # assume it's a run name
-    run_dir = resolver.run_dir(model)
+    run_dir = Path("data/runs") / model
     if not run_dir.exists():
         raise click.ClickException(
             f"Run '{model}' not found at {run_dir}\n"
-            f"Run 'kilonova list models' to see available runs."
+            f"Check data/runs/ for available runs."
         )
 
-    # use best.pth checkpoint if available, otherwise latest
     checkpoint_dir = run_dir / "checkpoints"
     if not checkpoint_dir.exists():
         raise click.ClickException(
@@ -156,7 +153,6 @@ def resolve_checkpoint(model: str) -> Path:
     if best_checkpoint.exists():
         return best_checkpoint
 
-    # find latest checkpoint
     checkpoints = sorted(checkpoint_dir.glob("epoch-*.pth"))
     if not checkpoints:
         raise click.ClickException(f"No checkpoints found in {checkpoint_dir}")
