@@ -73,27 +73,9 @@ def train_model_loop(model, train_loader, val_loader, optimizer, device, num_epo
     tokens_seen, global_step = 0, 0
     best_val_loss = float('inf')
     steps_without_improvement = 0
-    best_model_state = None
 
-    # initial evaluation before training starts (baseline)
-    train_loss, val_loss = evaluate_model(model, train_loader, val_loader, device, eval_iter)
-    train_losses.append(train_loss)
-    val_losses.append(val_loss)
-    track_tokens_seen.append(0)
-    lrs.append(optimizer.param_groups[0]['lr'])
-    best_val_loss = val_loss
-    best_model_state = {
-        'model_state_dict': {k: v.cpu() for k, v in model.state_dict().items()},
-        'config': model_config,
-        'model_name': model_name,
-        'val_loss': best_val_loss,
-        'epoch': 0,
-        'global_step': 0,
-    }
     if checkpoint_dir:
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        torch.save(best_model_state, checkpoint_dir / "best.pth")
-    logger.info(f"Initial eval | Train: {train_loss:.3f} | Val: {val_loss:.3f}")
 
     for epoch in range(num_epochs):
         model.train()
@@ -104,6 +86,8 @@ def train_model_loop(model, train_loader, val_loader, optimizer, device, num_epo
         pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}", leave=False)
 
         for batch_idx, (input_batch, target_batch) in enumerate(pbar):
+            tokens_seen += input_batch.numel()
+
             with torch.amp.autocast(device.type, enabled=(scaler is not None)):
                 loss = calc_loss_batch(input_batch, target_batch, model, device)
 
@@ -134,53 +118,50 @@ def train_model_loop(model, train_loader, val_loader, optimizer, device, num_epo
 
                 global_step += 1
 
-            tokens_seen += input_batch.numel()
+                if global_step % eval_freq == 0:
+                    current_lr = optimizer.param_groups[0]['lr']
+
+                    train_loss, val_loss = evaluate_model(
+                        model, train_loader, val_loader, device, eval_iter)
+
+                    train_losses.append(train_loss)
+                    val_losses.append(val_loss)
+                    track_tokens_seen.append(tokens_seen)
+                    lrs.append(current_lr)
+
+                    logger.info(
+                        f"Step {global_step:05d} | Train: {train_loss:.3f} | "
+                        f"Val: {val_loss:.3f} | LR: {current_lr:.2e}"
+                    )
+
+                    if val_loss < best_val_loss:
+                        best_val_loss = val_loss
+                        steps_without_improvement = 0
+                        logger.info(f"New best val loss: {best_val_loss:.3f}")
+
+                        if checkpoint_dir:
+                            checkpoint_path = checkpoint_dir / "best.pth"
+                            torch.save({
+                                'model_state_dict': model.state_dict(),
+                                'config': model_config,
+                                'model_name': model_name,
+                                'val_loss': best_val_loss,
+                                'epoch': epoch,
+                                'global_step': global_step,
+                            }, checkpoint_path)
+                            logger.info(f"Saved best checkpoint: {checkpoint_path}")
+                    else:
+                        steps_without_improvement += 1
+                        if patience is not None and steps_without_improvement >= patience:
+                            logger.info(f"Early stopping after {patience} steps without improvement")
+                            return train_losses, val_losses, track_tokens_seen, lrs
 
             current_lr = optimizer.param_groups[0]['lr']
             pbar.set_postfix({'loss': f'{(loss.item() * gradient_accumulation_steps):.3f}', 'lr': f'{current_lr:.2e}'})
 
-            if global_step % eval_freq == 0:
-                train_loss, val_loss = evaluate_model(
-                    model, train_loader, val_loader, device, eval_iter)
+        logger.info(f"Epoch {epoch+1}/{num_epochs} complete | Steps: {global_step}")
 
-                train_losses.append(train_loss)
-                val_losses.append(val_loss)
-                track_tokens_seen.append(tokens_seen)
-                lrs.append(current_lr)
-
-                logger.info(
-                    f"Step {global_step:05d} | Train: {train_loss:.3f} | "
-                    f"Val: {val_loss:.3f} | LR: {current_lr:.2e}"
-                )
-
-                if val_loss < best_val_loss:
-                    best_val_loss = val_loss
-                    steps_without_improvement = 0
-                    logger.info(f"New best val loss: {best_val_loss:.3f}")
-
-                    # save best model state (move to cpu to reduce memory pressure)
-                    best_model_state = {
-                        'model_state_dict': {k: v.cpu() for k, v in model.state_dict().items()},
-                        'config': model_config,
-                        'model_name': model_name,
-                        'val_loss': best_val_loss,
-                        'epoch': epoch,
-                        'global_step': global_step,
-                    }
-
-                    # save checkpoint immediately if checkpoint_dir is provided
-                    if checkpoint_dir:
-                        checkpoint_dir.mkdir(parents=True, exist_ok=True)
-                        checkpoint_path = checkpoint_dir / "best.pth"
-                        torch.save(best_model_state, checkpoint_path)
-                        logger.info(f"Saved best checkpoint: {checkpoint_path}")
-                else:
-                    steps_without_improvement += 1
-                    if patience is not None and steps_without_improvement >= patience:
-                        logger.info(f"Early stopping after {patience} steps without improvement")
-                        return train_losses, val_losses, track_tokens_seen, lrs, best_model_state
-
-    return train_losses, val_losses, track_tokens_seen, lrs, best_model_state
+    return train_losses, val_losses, track_tokens_seen, lrs
 
 
 def save_training_metrics(run_dir, train_losses, val_losses, tokens_seen, lrs):
@@ -299,7 +280,7 @@ def run_training(config: TrainConfig) -> Sequence[float]:
     # prepare checkpoint directory
     checkpoint_dir = config.run_dir / "checkpoints" if config.run_dir else None
 
-    train_losses, val_losses, tokens_seen, lrs, best_model_state = train_model_loop(
+    train_losses, val_losses, tokens_seen, lrs = train_model_loop(
         model=model,
         train_loader=train_loader,
         val_loader=val_loader,
@@ -318,12 +299,8 @@ def run_training(config: TrainConfig) -> Sequence[float]:
         model_name=config.model,
     )
 
-    # save metrics (checkpoint already saved during training when best found)
-    if best_model_state:
-        if config.run_dir:
-            save_training_metrics(config.run_dir, train_losses, val_losses, tokens_seen, lrs)
-    else:
-        logger.warning("No best model state found, this should not happen")
+    if config.run_dir:
+        save_training_metrics(config.run_dir, train_losses, val_losses, tokens_seen, lrs)
 
     logger.info("Training complete")
 
@@ -337,5 +314,5 @@ def _configure_logging() -> None:
     logger.handlers = []
 
     handler = TqdmLoggingHandler()
-    handler.setFormatter(logging.Formatter('%(levelname)s: %(message)s'))
+    handler.setFormatter(logging.Formatter('[%(asctime)s] %(levelname)s: %(message)s', datefmt='%H:%M:%S'))
     logger.addHandler(handler)

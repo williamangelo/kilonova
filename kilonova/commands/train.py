@@ -96,7 +96,7 @@ def train_model(
         "batch_size": 2,
         "learning_rate": 0.0004,
         "patience": None,
-        "eval_freq": 500,
+        "eval_freq": 100,
         "eval_iter": 50,
         "gradient_accumulation_steps": 4,
         "device": "auto",
