@@ -10,4 +10,5 @@ dist/
 build/
 .worktrees/
 .env
+.claude/
 
