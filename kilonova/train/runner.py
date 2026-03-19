@@ -1,318 +1,171 @@
-"""Training runner that drives the GPT optimization loop."""
+"""Training runner."""
 
 from __future__ import annotations
 
-import json
 import logging
 import math
-from typing import Sequence
+import time
 
 import torch
-from tqdm import tqdm
 
 from kilonova.data import create_dataloaders
-from models.loader import create_model_from_config
-from kilonova.train.config import TrainConfig
-
-
-class TqdmLoggingHandler(logging.Handler):
-    """Logging handler that keeps tqdm progress bars intact."""
-
-    def emit(self, record: logging.LogRecord) -> None:
-        try:
-            msg = self.format(record)
-            tqdm.write(msg)
-        except Exception:  # pragma: no cover - defensive
-            self.handleError(record)
-
+from kilonova.train.config import TrainConfig, detect_compute_dtype
+from models.architectures import get_model_config, get_architecture_class
 
 logger = logging.getLogger(__name__)
 
 
-def calc_loss_batch(input_batch, target_batch, model, device):
-    """Calculate loss for a single batch."""
-    input_batch, target_batch = input_batch.to(device), target_batch.to(device)
-    logits = model(input_batch)
-    loss = torch.nn.functional.cross_entropy(logits.flatten(0, 1), target_batch.flatten())
-    return loss
+def run_training(config: TrainConfig) -> None:
+    """Execute the full training pipeline."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s] %(levelname)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
 
+    torch.manual_seed(42)
+    device = config.device
 
-def calc_loss_loader(data_loader, model, device, num_batches):
-    """Calculate average loss over a dataloader."""
-    total_loss = 0.0
-    batches_processed = 0
+    if device.type == "cuda":
+        torch.cuda.manual_seed(42)
+        torch.set_float32_matmul_precision("high")
 
-    for i, (input_batch, target_batch) in enumerate(data_loader):
-        if i >= num_batches:
-            break
-        loss = calc_loss_batch(input_batch, target_batch, model, device)
-        total_loss += loss.item()
-        batches_processed += 1
+    compute_dtype, dtype_reason = detect_compute_dtype(device)
+    logger.info(f"Device: {device} | dtype: {compute_dtype} ({dtype_reason})")
 
-    if batches_processed == 0:
-        return float("nan")
-    return total_loss / batches_processed
+    # build model
+    model_config = get_model_config(config.model)
+    arch_name = model_config.pop("architecture")
+    model = get_architecture_class(arch_name)(model_config)
+    model_config["architecture"] = arch_name
 
+    total_params = sum(p.numel() for p in model.parameters())
+    param_str = f"{total_params/1e9:.1f}B" if total_params >= 1e9 else f"{total_params/1e6:.0f}M"
+    logger.info(
+        f"Model: {config.model} ({param_str} params, "
+        f"{model_config['emb_dim']}d, {model_config['n_layers']}L, {model_config['n_heads']}H)"
+    )
 
-def evaluate_model(model, train_loader, val_loader, device, eval_iter):
-    """Evaluate model on train and validation sets."""
-    model.eval()
-    with torch.no_grad():
-        train_loss = calc_loss_loader(train_loader, model, device, num_batches=eval_iter)
-        val_loss = calc_loss_loader(val_loader, model, device, num_batches=eval_iter)
-    model.train()
-    return train_loss, val_loss
+    model.to(device)
+    logger.info("Compiling model with torch.compile")
+    compiled_model = torch.compile(model)
 
-
-def train_model_loop(model, train_loader, val_loader, optimizer, device, num_epochs,
-                     eval_freq, eval_iter, patience,
-                     gradient_accumulation_steps, scaler, scheduler=None, max_grad_norm=1.0,
-                     checkpoint_dir=None, model_config=None, model_name=None):
-    """execute the training loop with early stopping, gradient accumulation, and mixed precision."""
-    train_losses, val_losses, track_tokens_seen, lrs = [], [], [], []
-    tokens_seen, global_step = 0, 0
-    best_val_loss = float('inf')
-    steps_without_improvement = 0
-
-    if checkpoint_dir:
-        checkpoint_dir.mkdir(parents=True, exist_ok=True)
-
-    for epoch in range(num_epochs):
-        model.train()
-
-        if hasattr(train_loader.dataset, 'set_epoch'):
-            train_loader.dataset.set_epoch(epoch)
-
-        pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}", leave=False)
-
-        for batch_idx, (input_batch, target_batch) in enumerate(pbar):
-            tokens_seen += input_batch.numel()
-
-            with torch.amp.autocast(device.type, enabled=(scaler is not None)):
-                loss = calc_loss_batch(input_batch, target_batch, model, device)
-
-            loss = loss / gradient_accumulation_steps
-
-            if scaler is not None:
-                scaler.scale(loss).backward()
-            else:
-                loss.backward()
-
-            if (batch_idx + 1) % gradient_accumulation_steps == 0:
-                if scaler is not None:
-                    scaler.unscale_(optimizer)
-
-                if max_grad_norm > 0:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
-
-                if scaler is not None:
-                    scaler.step(optimizer)
-                    scaler.update()
-                else:
-                    optimizer.step()
-
-                optimizer.zero_grad(set_to_none=True)
-
-                if scheduler is not None:
-                    scheduler.step()
-
-                global_step += 1
-
-                if global_step % eval_freq == 0:
-                    current_lr = optimizer.param_groups[0]['lr']
-
-                    train_loss, val_loss = evaluate_model(
-                        model, train_loader, val_loader, device, eval_iter)
-
-                    train_losses.append(train_loss)
-                    val_losses.append(val_loss)
-                    track_tokens_seen.append(tokens_seen)
-                    lrs.append(current_lr)
-
-                    logger.info(
-                        f"Step {global_step:05d} | Train: {train_loss:.3f} | "
-                        f"Val: {val_loss:.3f} | LR: {current_lr:.2e}"
-                    )
-
-                    if val_loss < best_val_loss:
-                        best_val_loss = val_loss
-                        steps_without_improvement = 0
-                        logger.info(f"New best val loss: {best_val_loss:.3f}")
-
-                        if checkpoint_dir:
-                            checkpoint_path = checkpoint_dir / "best.pth"
-                            torch.save({
-                                'model_state_dict': model.state_dict(),
-                                'config': model_config,
-                                'model_name': model_name,
-                                'val_loss': best_val_loss,
-                                'epoch': epoch,
-                                'global_step': global_step,
-                            }, checkpoint_path)
-                            logger.info(f"Saved best checkpoint: {checkpoint_path}")
-                    else:
-                        steps_without_improvement += 1
-                        if patience is not None and steps_without_improvement >= patience:
-                            logger.info(f"Early stopping after {patience} steps without improvement")
-                            return train_losses, val_losses, track_tokens_seen, lrs
-
-            current_lr = optimizer.param_groups[0]['lr']
-            pbar.set_postfix({'loss': f'{(loss.item() * gradient_accumulation_steps):.3f}', 'lr': f'{current_lr:.2e}'})
-
-        logger.info(f"Epoch {epoch+1}/{num_epochs} complete | Steps: {global_step}")
-
-    return train_losses, val_losses, track_tokens_seen, lrs
-
-
-def save_training_metrics(run_dir, train_losses, val_losses, tokens_seen, lrs):
-    """save training metrics to logs directory"""
-    logs_dir = run_dir / "logs"
-    logs_dir.mkdir(parents=True, exist_ok=True)
-
-    # convert tensors to lists for json serialization
-    def to_list(values):
-        if not values:
-            return []
-        if isinstance(values[0], torch.Tensor):
-            return [v.item() for v in values]
-        return list(values)
-
-    metrics = {
-        "train_losses": to_list(train_losses),
-        "val_losses": to_list(val_losses),
-        "tokens_seen": to_list(tokens_seen),
-        "learning_rates": to_list(lrs),
-        "best_val_loss": min(val_losses) if val_losses else None,
-    }
-
-    metrics_path = logs_dir / "metrics.json"
-    with open(metrics_path, 'w') as f:
-        json.dump(metrics, f, indent=2)
-
-    logger.info(f"Training metrics saved: {metrics_path}")
-
-
-def run_training(config: TrainConfig) -> Sequence[float]:
-    """Execute the full training pipeline using an already parsed config."""
-    _configure_logging()
-
-    # use TF32 for matmul on ampere+ GPUs (20-30% speedup with minimal precision loss)
-    torch.set_float32_matmul_precision('high')
-
-    torch.manual_seed(123)  # fixed seed for reproducibility
-
-    model, model_config = create_model_from_config(config.model)
-
+    # data
     train_loader, val_loader = create_dataloaders(
         data_dir=str(config.data_dir),
         batch_size=config.batch_size,
         max_length=model_config["context_length"],
-        max_tokens=config.max_tokens,
         data_fraction=config.data_fraction,
-        num_workers=config.num_workers,
     )
+    train_iter = iter(train_loader)
 
-    total_params = sum(p.numel() for p in model.parameters())
-
-    def format_params(params):
-        if params >= 1e9:
-            return f"{params/1e9:.1f}B"
-        return f"{params/1e6:.0f}M"
-
-    logger.info(
-        f"Model: {config.model} ({format_params(total_params)} params, "
-        f"{model_config['emb_dim']}d, {model_config['n_layers']}L, {model_config['n_heads']}H)"
-    )
-
-    device = config.device
-    logger.info(f"Device: {device}")
-    model.to(device)
-
-    scaler = None
-    if config.mixed_precision:
-        scaler = torch.amp.GradScaler('cuda')
-        logger.info("Mixed precision (fp16) enabled")
-
-    if config.compile_model:
-        logger.info("Compiling model with torch.compile")
-        model = torch.compile(model)
-
-    # weight_decay=0.1 is standard for transformer training (GPT-2, GPT-3, LLaMA)
+    # optimizer
     optimizer = torch.optim.AdamW(
-        model.parameters(),
+        compiled_model.parameters(),
         lr=config.learning_rate,
         weight_decay=0.1,
         fused=(device.type == "cuda"),
     )
 
-    if config.gradient_accumulation_steps > 1:
-        logger.info(
-            "Gradient accumulation: %d steps (effective batch size: %d)",
-            config.gradient_accumulation_steps,
-            config.batch_size * config.gradient_accumulation_steps,
-        )
+    # lr schedule: linear warmup + cosine decay to 10% of peak
+    num_iterations = config.num_iterations
+    warmup_steps = max(1, int(0.1 * num_iterations))
+    min_lr = config.learning_rate * 0.1
 
-    total_steps = (len(train_loader) // config.gradient_accumulation_steps) * config.epochs
-    # default warmup is 10% of training (common practice from BERT, GPT-2 papers)
-    warmup_steps = config.warmup_steps if config.warmup_steps is not None else int(0.1 * total_steps)
-    # default min_lr is 10% of peak lr (standard for cosine schedules)
-    min_lr = config.min_lr if config.min_lr is not None else config.learning_rate * 0.1
+    def get_lr(step: int) -> float:
+        if step < warmup_steps:
+            return config.learning_rate * (step + 1) / warmup_steps
+        progress = (step - warmup_steps) / max(1, num_iterations - warmup_steps)
+        cosine = 0.5 * (1 + math.cos(math.pi * progress))
+        return min_lr + (config.learning_rate - min_lr) * cosine
 
-    # linear warmup followed by cosine annealing to min_lr
-    def lr_lambda(current_step):
-        if current_step < warmup_steps:
-            return current_step / max(1, warmup_steps)
-        progress = (current_step - warmup_steps) / max(1, total_steps - warmup_steps)
-        cosine_decay = 0.5 * (1 + math.cos(progress * math.pi))
-        return (min_lr / config.learning_rate) + (1 - min_lr / config.learning_rate) * cosine_decay
+    logger.info(f"Training: {num_iterations} steps | warmup: {warmup_steps} | min_lr: {min_lr:.2e}")
+    if config.eval_every > 0:
+        logger.info(f"Eval every {config.eval_every} steps")
 
-    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
-
-    logger.info(
-        "Learning rate scheduler: warmup=%d steps, total=%d steps, min_lr=%.2e",
-        warmup_steps,
-        total_steps,
-        min_lr,
-    )
-
-    logger.info("Starting training")
-
-    # prepare checkpoint directory
-    checkpoint_dir = config.run_dir / "checkpoints" if config.run_dir else None
-
-    train_losses, val_losses, tokens_seen, lrs = train_model_loop(
-        model=model,
-        train_loader=train_loader,
-        val_loader=val_loader,
-        optimizer=optimizer,
-        device=device,
-        num_epochs=config.epochs,
-        eval_freq=config.eval_freq,
-        eval_iter=config.eval_iter,
-        patience=config.patience,
-        gradient_accumulation_steps=config.gradient_accumulation_steps,
-        scaler=scaler,
-        scheduler=scheduler,
-        max_grad_norm=config.max_grad_norm,
-        checkpoint_dir=checkpoint_dir,
-        model_config=model_config,
-        model_name=config.model,
-    )
-
+    # checkpoint dir
+    checkpoint_dir = None
     if config.run_dir:
-        save_training_metrics(config.run_dir, train_losses, val_losses, tokens_seen, lrs)
+        checkpoint_dir = config.run_dir / "checkpoints"
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-    logger.info("Training complete")
+    use_autocast = compute_dtype != torch.float32
+    smooth_loss = 0.0
+    best_val_loss = float("inf")
 
-    return train_losses, val_losses, tokens_seen, lrs
+    for step in range(num_iterations + 1):
+        last_step = step == num_iterations
 
+        # eval
+        should_eval = config.eval_every > 0 and (last_step or (step > 0 and step % config.eval_every == 0))
+        if should_eval:
+            compiled_model.eval()
+            total_loss, count = 0.0, 0
+            with torch.no_grad():
+                for i, (inp, tgt) in enumerate(val_loader):
+                    if i >= 50:
+                        break
+                    inp, tgt = inp.to(device), tgt.to(device)
+                    logits = compiled_model(inp)
+                    total_loss += torch.nn.functional.cross_entropy(logits.flatten(0, 1), tgt.flatten()).item()
+                    count += 1
+            val_loss = total_loss / count if count > 0 else float("nan")
+            compiled_model.train()
 
-def _configure_logging() -> None:
-    """Configure logger to play nicely with tqdm."""
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
-    logger.handlers = []
+            lr = get_lr(min(step, num_iterations - 1))
+            logger.info(f"Step {step:05d}/{num_iterations} | val_loss: {val_loss:.4f} | lr: {lr:.2e}")
 
-    handler = TqdmLoggingHandler()
-    handler.setFormatter(logging.Formatter('[%(asctime)s] %(levelname)s: %(message)s', datefmt='%H:%M:%S'))
-    logger.addHandler(handler)
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                logger.info(f"New best val loss: {best_val_loss:.4f}")
+                if checkpoint_dir:
+                    torch.save({
+                        "model_state_dict": model.state_dict(),
+                        "config": model_config,
+                        "model_name": config.model,
+                        "val_loss": best_val_loss,
+                        "step": step,
+                    }, checkpoint_dir / "best.pth")
+                    logger.info(f"Saved checkpoint: {checkpoint_dir / 'best.pth'}")
+
+        if last_step:
+            break
+
+        # set lr
+        lr = get_lr(step)
+        for group in optimizer.param_groups:
+            group["lr"] = lr
+
+        # get next batch, wrapping around
+        try:
+            input_batch, target_batch = next(train_iter)
+        except StopIteration:
+            train_iter = iter(train_loader)
+            input_batch, target_batch = next(train_iter)
+
+        input_batch, target_batch = input_batch.to(device), target_batch.to(device)
+
+        t0 = time.time()
+        with torch.amp.autocast(device.type, dtype=compute_dtype, enabled=use_autocast):
+            logits = compiled_model(input_batch)
+            loss = torch.nn.functional.cross_entropy(logits.flatten(0, 1), target_batch.flatten())
+
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(compiled_model.parameters(), 1.0)
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+
+        loss_f = loss.item()
+        dt = time.time() - t0
+
+        smooth_loss = 0.9 * smooth_loss + 0.1 * loss_f
+        debiased_loss = smooth_loss / (1 - 0.9 ** (step + 1))
+
+        if step % 10 == 0:
+            tok_per_sec = input_batch.numel() / dt
+            logger.info(
+                f"Step {step:05d}/{num_iterations} | loss: {debiased_loss:.4f} | "
+                f"lr: {lr:.2e} | dt: {dt*1000:.0f}ms | tok/s: {tok_per_sec:,.0f}"
+            )
+
+    logger.info(f"Training complete | best val: {best_val_loss:.4f}")
