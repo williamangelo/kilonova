@@ -26,11 +26,11 @@ class TestResolveDevice:
                 resolve_device("cuda")
 
     def test_auto_with_cuda_available_returns_cuda(self):
-        with patch("torch.cuda.is_available", return_value=True):
+        with patch("kilonova.train.config.torch.cuda.is_available", return_value=True):
             device = resolve_device("auto")
             assert device == torch.device("cuda")
 
     def test_auto_without_cuda_returns_cpu(self):
-        with patch("torch.cuda.is_available", return_value=False):
+        with patch("kilonova.train.config.torch.cuda.is_available", return_value=False):
             device = resolve_device("auto")
             assert device == torch.device("cpu")

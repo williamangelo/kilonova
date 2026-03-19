@@ -118,10 +118,10 @@ def _create_train_val_bins(path: Path, train_tokens: list[int], val_tokens: list
     np_dtype = np.uint16 if dtype == "uint16" else np.uint32
 
     train_arr = np.array(train_tokens, dtype=np_dtype)
-    (path / "train.bin").open("wb").write(train_arr.tobytes())
+    (path / "train.bin").write_bytes(train_arr.tobytes())
 
     val_arr = np.array(val_tokens, dtype=np_dtype)
-    (path / "val.bin").open("wb").write(val_arr.tobytes())
+    (path / "val.bin").write_bytes(val_arr.tobytes())
 
     meta = {
         "train_tokens": len(train_tokens),

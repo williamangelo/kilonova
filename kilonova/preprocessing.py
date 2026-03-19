@@ -29,9 +29,8 @@ def _setup_preprocessing(
     output_path.mkdir(parents=True, exist_ok=True)
 
     tokenizer = tiktoken.get_encoding(tokenizer_name)
-    vocab_size = tokenizer.n_vocab
 
-    if vocab_size > 65535:
+    if tokenizer.n_vocab > 65535:
         dtype = np.uint32
         dtype_name = "uint32"
     else:
