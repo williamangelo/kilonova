@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from osmium.cli import cli
+from kilonova.cli import cli
 
 
 class TestDownloadValidation:
@@ -144,7 +144,7 @@ class TestGenerateValidation:
     def test_suggests_list_models_on_missing_run(self):
         runner = CliRunner()
         result = runner.invoke(cli, ["generate", "nonexistent", "--prompt", "test"])
-        assert "osmium list models" in result.output
+        assert "kilonova list models" in result.output
 
 
 class TestListCommands:

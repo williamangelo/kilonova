@@ -1,1 +1,1 @@
-"""Tests for osmium."""
+"""Tests for kilonova."""

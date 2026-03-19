@@ -6,8 +6,8 @@ from unittest.mock import patch
 import pytest
 import torch
 
-from osmium.commands.generate import resolve_checkpoint
-from osmium.train.config import resolve_device
+from kilonova.commands.generate import resolve_checkpoint
+from kilonova.train.config import resolve_device
 
 
 class TestResolveDevice:
@@ -18,12 +18,12 @@ class TestResolveDevice:
         assert device == torch.device("cpu")
 
     def test_explicit_cuda_returns_cuda(self):
-        with patch("osmium.train.config.torch.cuda.is_available", return_value=True):
+        with patch("kilonova.train.config.torch.cuda.is_available", return_value=True):
             device = resolve_device("cuda")
             assert device == torch.device("cuda")
 
     def test_explicit_cuda_raises_when_unavailable(self):
-        with patch("osmium.train.config.torch.cuda.is_available", return_value=False):
+        with patch("kilonova.train.config.torch.cuda.is_available", return_value=False):
             with pytest.raises(ValueError, match="CUDA device requested"):
                 resolve_device("cuda")
 
@@ -56,7 +56,7 @@ class TestResolveCheckpoint:
         best = checkpoint_dir / "best.pth"
         best.touch()
 
-        with patch("osmium.commands.generate.PathResolver") as mock_resolver:
+        with patch("kilonova.commands.generate.PathResolver") as mock_resolver:
             mock_resolver.return_value.run_dir.return_value = run_dir
             result = resolve_checkpoint("my-run")
             assert result == best
@@ -70,7 +70,7 @@ class TestResolveCheckpoint:
         (checkpoint_dir / "epoch-002.pth").touch()
         (checkpoint_dir / "epoch-003.pth").touch()
 
-        with patch("osmium.commands.generate.PathResolver") as mock_resolver:
+        with patch("kilonova.commands.generate.PathResolver") as mock_resolver:
             mock_resolver.return_value.run_dir.return_value = run_dir
             result = resolve_checkpoint("my-run")
             assert result == checkpoint_dir / "epoch-003.pth"
@@ -78,7 +78,7 @@ class TestResolveCheckpoint:
     def test_raises_for_nonexistent_run(self, tmp_path):
         run_dir = tmp_path / "data" / "runs" / "nonexistent"
 
-        with patch("osmium.commands.generate.PathResolver") as mock_resolver:
+        with patch("kilonova.commands.generate.PathResolver") as mock_resolver:
             mock_resolver.return_value.run_dir.return_value = run_dir
             with pytest.raises(Exception) as exc_info:
                 resolve_checkpoint("nonexistent")
@@ -89,7 +89,7 @@ class TestResolveCheckpoint:
         run_dir.mkdir(parents=True)
         # no checkpoints directory
 
-        with patch("osmium.commands.generate.PathResolver") as mock_resolver:
+        with patch("kilonova.commands.generate.PathResolver") as mock_resolver:
             mock_resolver.return_value.run_dir.return_value = run_dir
             with pytest.raises(Exception) as exc_info:
                 resolve_checkpoint("empty-run")
@@ -101,7 +101,7 @@ class TestResolveCheckpoint:
         checkpoint_dir.mkdir(parents=True)
         # empty checkpoints directory
 
-        with patch("osmium.commands.generate.PathResolver") as mock_resolver:
+        with patch("kilonova.commands.generate.PathResolver") as mock_resolver:
             mock_resolver.return_value.run_dir.return_value = run_dir
             with pytest.raises(Exception) as exc_info:
                 resolve_checkpoint("empty-checkpoints")

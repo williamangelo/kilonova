@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from osmium.utils.paths import PathResolver
+from kilonova.utils.paths import PathResolver
 
 
 class TestPathResolver:

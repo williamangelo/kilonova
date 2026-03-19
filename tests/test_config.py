@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from osmium.utils.config import load_yaml_config, save_yaml_config
+from kilonova.utils.config import load_yaml_config, save_yaml_config
 
 
 class TestLoadYamlConfig:
