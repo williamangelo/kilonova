@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "osmium"
+name = "kilonova"
 version = "0.1.0"
-description = "Add your description here"
+description = "A unified CLI for training LLMs from scratch."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -24,8 +24,8 @@ dev = [
 ]
 
 [project.scripts]
-osmium = "osmium.cli:main"
+kilonova = "kilonova.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["osmium*", "models*", "loaders*"]
+include = ["kilonova*", "models*", "loaders*"]
 exclude = ["data*", "scripts*", "docs*"]
