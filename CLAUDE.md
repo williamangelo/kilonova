@@ -5,7 +5,6 @@ this file is for working instructions only — project documentation lives in th
 ## documentation
 
 - `ARCHITECTURE.md` — system design, component overview, extension points
-- `VISION.md` — project purpose, principles, direction
 - `docs/research/` — research references by topic
 - `docs/plans/` — implementation plans (one file per initiative)
 
