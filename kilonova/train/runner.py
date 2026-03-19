@@ -10,7 +10,7 @@ from typing import Sequence
 import torch
 from tqdm import tqdm
 
-from loaders import create_dataloaders
+from kilonova.data import create_dataloaders
 from models.loader import create_model_from_config
 from kilonova.train.config import TrainConfig
 
