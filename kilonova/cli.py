@@ -1,4 +1,4 @@
-"""Click-based command-line interface for Osmium."""
+"""Click-based command-line interface for Kilonova."""
 
 from __future__ import annotations
 
@@ -7,14 +7,14 @@ from typing import Any
 
 import click
 
-from osmium.commands.clean import clean_dataset
-from osmium.commands.download import download_dataset
-from osmium.commands.evaluate import evaluate_model as evaluate_model_impl
-from osmium.commands.generate import generate_cmd
-from osmium.commands.info import info_cmd
-from osmium.commands.list_cmd import list_datasets_cmd, list_models_cmd
-from osmium.commands.preprocess import preprocess_data
-from osmium.commands.train import train_model
+from kilonova.commands.clean import clean_dataset
+from kilonova.commands.download import download_dataset
+from kilonova.commands.evaluate import evaluate_model as evaluate_model_impl
+from kilonova.commands.generate import generate_cmd
+from kilonova.commands.info import info_cmd
+from kilonova.commands.list_cmd import list_datasets_cmd, list_models_cmd
+from kilonova.commands.preprocess import preprocess_data
+from kilonova.commands.train import train_model
 from models.architectures import MODEL_REGISTRY
 
 
@@ -26,7 +26,7 @@ def _warn(message: str) -> None:
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option()
 def cli() -> None:
-    """osmium - unified CLI for training LLMs from scratch."""
+    """kilonova - unified CLI for training LLMs from scratch."""
 
 
 @cli.command(help="Download a dataset.")

@@ -1,1 +1,1 @@
-"""Command implementations for osmium CLI."""
+"""Command implementations for kilonova CLI."""

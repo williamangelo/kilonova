@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from loaders import create_dataloaders
 from models.loader import create_model_from_config
-from osmium.train.config import TrainConfig
+from kilonova.train.config import TrainConfig
 
 
 class TqdmLoggingHandler(logging.Handler):

@@ -8,7 +8,7 @@ import click
 
 from loaders.cleaning.registry import get_source, is_registered
 from loaders.downloading import download_from_huggingface
-from osmium.utils import PathResolver
+from kilonova.utils import PathResolver
 
 
 def download_dataset(dataset: str, output: Path | None) -> None:
@@ -43,7 +43,7 @@ def download_dataset(dataset: str, output: Path | None) -> None:
 
     # show next steps
     click.echo(f"\nNext steps:")
-    click.echo(f"  osmium clean {dataset}")
+    click.echo(f"  kilonova clean {dataset}")
 
 
 __all__ = ["download_dataset"]

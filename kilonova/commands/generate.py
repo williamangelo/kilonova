@@ -8,8 +8,8 @@ import click
 import torch
 import tiktoken
 
-from osmium.utils import PathResolver
-from osmium.train.config import resolve_device
+from kilonova.utils import PathResolver
+from kilonova.train.config import resolve_device
 from models.architectures import get_architecture_class
 
 
@@ -142,7 +142,7 @@ def resolve_checkpoint(model: str) -> Path:
     if not run_dir.exists():
         raise click.ClickException(
             f"Run '{model}' not found at {run_dir}\n"
-            f"Run 'osmium list models' to see available runs."
+            f"Run 'kilonova list models' to see available runs."
         )
 
     # use best.pth checkpoint if available, otherwise latest

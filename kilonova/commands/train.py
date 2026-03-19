@@ -8,10 +8,10 @@ from typing import Any
 import click
 
 from models.architectures import is_registered as is_model_registered, list_models
-from osmium.train.config import TrainConfig
-from osmium.train.runner import run_training
-from osmium.utils import PathResolver
-from osmium.utils.config import load_yaml_config, save_yaml_config
+from kilonova.train.config import TrainConfig
+from kilonova.train.runner import run_training
+from kilonova.utils import PathResolver
+from kilonova.utils.config import load_yaml_config, save_yaml_config
 
 
 def train_model(
@@ -54,14 +54,14 @@ def train_model(
     if not data_dir.exists():
         raise click.ClickException(
             f"Dataset not preprocessed: {data}\n"
-            f"Run: osmium preprocess {data}"
+            f"Run: kilonova preprocess {data}"
         )
 
     # validate train.bin and val.bin exist
     if not (data_dir / "train.bin").exists() or not (data_dir / "val.bin").exists():
         raise click.ClickException(
             f"Dataset incomplete: missing train.bin or val.bin in {data_dir}\n"
-            f"Run: osmium preprocess {data}"
+            f"Run: kilonova preprocess {data}"
         )
 
     # determine experiment name
@@ -147,7 +147,7 @@ def train_model(
 
     click.secho(f"\n✓ Training complete for '{name}'", fg="green")
     click.echo(f"\nNext steps:")
-    click.echo(f"  osmium evaluate {name}")
+    click.echo(f"  kilonova evaluate {name}")
 
 
 __all__ = ["train_model"]

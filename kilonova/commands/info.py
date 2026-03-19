@@ -8,7 +8,7 @@ from pathlib import Path
 import click
 
 from loaders.cleaning.registry import DATASET_REGISTRY, get_source
-from osmium.utils import PathResolver
+from kilonova.utils import PathResolver
 
 
 def info_cmd(name: str) -> None:
@@ -33,7 +33,7 @@ def info_cmd(name: str) -> None:
     # not found
     raise click.ClickException(
         f"'{name}' not found as dataset or training run.\n"
-        f"Use 'osmium list datasets' or 'osmium list models' to see available options."
+        f"Use 'kilonova list datasets' or 'kilonova list models' to see available options."
     )
 
 

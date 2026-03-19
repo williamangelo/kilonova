@@ -8,7 +8,7 @@ import click
 
 from loaders.cleaning import get_cleaner, is_registered
 from loaders.cleaning.generic import GenericCleaner
-from osmium.utils import PathResolver
+from kilonova.utils import PathResolver
 
 
 def clean_dataset(dataset: str, input_dir: Path | None, output: Path | None) -> None:
@@ -29,7 +29,7 @@ def clean_dataset(dataset: str, input_dir: Path | None, output: Path | None) -> 
     if not input_path.exists():
         raise click.ClickException(
             f"Input directory not found: {input_path}\n"
-            f"Run: osmium download {dataset}"
+            f"Run: kilonova download {dataset}"
         )
 
     # get cleaner (dataset-specific or generic)
@@ -50,7 +50,7 @@ def clean_dataset(dataset: str, input_dir: Path | None, output: Path | None) -> 
 
     # show next steps
     click.echo(f"\nNext steps:")
-    click.echo(f"  osmium preprocess {dataset}")
+    click.echo(f"  kilonova preprocess {dataset}")
 
 
 __all__ = ["clean_dataset"]

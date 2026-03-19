@@ -8,7 +8,7 @@ from pathlib import Path
 import click
 
 from loaders.cleaning.registry import DATASET_REGISTRY
-from osmium.utils import PathResolver
+from kilonova.utils import PathResolver
 
 
 def list_datasets_cmd() -> None:

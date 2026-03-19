@@ -1,4 +1,4 @@
-"""Platform detection utilities for osmium."""
+"""Platform detection utilities for kilonova."""
 
 import platform
 

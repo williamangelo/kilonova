@@ -6,12 +6,12 @@ from pathlib import Path
 
 import click
 
-from osmium.commands.generate import (
+from kilonova.commands.generate import (
     load_model,
     generate_text,
     resolve_checkpoint,
 )
-from osmium.train.config import resolve_device
+from kilonova.train.config import resolve_device
 
 
 # curated prompts for evaluation

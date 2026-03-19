@@ -9,7 +9,7 @@ import warnings
 
 import torch
 
-from osmium.utils.platform import is_macos
+from kilonova.utils.platform import is_macos
 
 WarnFunc = Callable[[str], None]
 

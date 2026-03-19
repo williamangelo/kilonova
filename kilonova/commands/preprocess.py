@@ -7,7 +7,7 @@ from pathlib import Path
 import click
 
 from loaders.preprocessing import preprocess_dataset
-from osmium.utils import PathResolver
+from kilonova.utils import PathResolver
 
 
 def preprocess_data(dataset: str, input_dir: Path | None, output: Path | None, train_split: float) -> None:
@@ -29,7 +29,7 @@ def preprocess_data(dataset: str, input_dir: Path | None, output: Path | None, t
     if not input_path.exists():
         raise click.ClickException(
             f"Input directory not found: {input_path}\n"
-            f"Run: osmium clean {dataset}"
+            f"Run: kilonova clean {dataset}"
         )
 
     click.echo(f"Preprocessing dataset: {dataset}")
@@ -50,7 +50,7 @@ def preprocess_data(dataset: str, input_dir: Path | None, output: Path | None, t
 
     # show next steps
     click.echo(f"\nNext steps:")
-    click.echo(f"  osmium train gpt2-small --data {dataset}")
+    click.echo(f"  kilonova train gpt2-small --data {dataset}")
 
 
 __all__ = ["preprocess_data"]
