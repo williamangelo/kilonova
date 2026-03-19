@@ -1,12 +1,12 @@
 # Vision
 
-## What Osmium Is
+## What Kilonova Is
 
-Osmium is a unified CLI for training language models from scratch. It provides the complete pipeline — data acquisition, cleaning, tokenization, training, evaluation, and generation — as a single tool with consistent conventions.
+Kilonova is a unified CLI for training language models from scratch. It provides the complete pipeline — data acquisition, cleaning, tokenization, training, evaluation, and generation — as a single tool with consistent conventions.
 
 ## Who It's For
 
-Practitioners who want to understand and control the full LLM training stack. Osmium prioritizes transparency over convenience: every stage is explicit, every default is documented, and the implementation is readable.
+Practitioners who want to understand and control the full LLM training stack. Kilonova prioritizes transparency over convenience: every stage is explicit, every default is documented, and the implementation is readable.
 
 ## Principles
 
@@ -25,7 +25,7 @@ Practitioners who want to understand and control the full LLM training stack. Os
 
 ## Direction
 
-<!-- what's next for osmium? some areas the codebase is positioned for: -->
+<!-- what's next for kilonova? some areas the codebase is positioned for: -->
 <!-- - new architectures beyond GPT-2 -->
 <!-- - larger-scale training (distributed, gradient checkpointing) -->
 <!-- - better evaluation (perplexity benchmarks, downstream tasks) -->

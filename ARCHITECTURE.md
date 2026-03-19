@@ -22,7 +22,7 @@ models/                    # model system
 └── gpt2/                  #   GPT-2 implementation
     └── model.py           #   MultiHeadAttention, FeedForward, TransformerBlock, GPT2
 
-osmium/                    # CLI orchestration
+kilonova/                    # CLI orchestration
 ├── cli.py                 #   Click entry point, command registration
 ├── commands/              #   one module per command
 │   ├── download.py
@@ -58,7 +58,7 @@ Each stage reads from the previous stage's output directory under `data/`:
 data/raw/<dataset>/  →  data/clean/<dataset>/  →  data/processed/<dataset>/  →  data/runs/<name>/
 ```
 
-Path conventions are enforced by [`osmium/utils/paths.py`](osmium/utils/paths.py) (`PathResolver`).
+Path conventions are enforced by [`kilonova/utils/paths.py`](kilonova/utils/paths.py) (`PathResolver`).
 
 ## Key Design Decisions
 
@@ -72,11 +72,11 @@ Path conventions are enforced by [`osmium/utils/paths.py`](osmium/utils/paths.py
 
 ### Convention-over-config path resolution
 
-[`osmium/utils/paths.py`](osmium/utils/paths.py) derives all data paths from a single base directory (`data/`) and dataset/run names. Commands don't need explicit path arguments for the common case — they compute paths from names. Override flags exist for non-standard layouts.
+[`kilonova/utils/paths.py`](kilonova/utils/paths.py) derives all data paths from a single base directory (`data/`) and dataset/run names. Commands don't need explicit path arguments for the common case — they compute paths from names. Override flags exist for non-standard layouts.
 
 ### TrainConfig resolution chain
 
-[`osmium/train/config.py`](osmium/train/config.py) resolves training configuration in layers: hardcoded defaults → YAML file → CLI flags. Platform-aware defaults handle mixed precision (auto-enabled on CUDA, disabled on CPU/MPS), `torch.compile` (on by default), and dataloader workers (forced to 0 on macOS due to fork issues).
+[`kilonova/train/config.py`](kilonova/train/config.py) resolves training configuration in layers: hardcoded defaults → YAML file → CLI flags. Platform-aware defaults handle mixed precision (auto-enabled on CUDA, disabled on CPU/MPS), `torch.compile` (on by default), and dataloader workers (forced to 0 on macOS due to fork issues).
 
 ### Memory-mapped token dataset
 
@@ -99,6 +99,6 @@ Path conventions are enforced by [`osmium/utils/paths.py`](osmium/utils/paths.py
 
 ### Adding a new CLI command
 
-1. Create a module in `osmium/commands/`
+1. Create a module in `kilonova/commands/`
 2. Define a Click command function
-3. Register it in [`osmium/cli.py`](osmium/cli.py)
+3. Register it in [`kilonova/cli.py`](kilonova/cli.py)

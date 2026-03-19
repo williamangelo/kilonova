@@ -10,7 +10,7 @@
 #
 # optional env vars:
 #   LIGHTNING_SSH_PORT    - ssh port (default: 22)
-#   LIGHTNING_PATH        - remote base path (default: /root/osmium)
+#   LIGHTNING_PATH        - remote base path (default: /root/kilonova)
 
 set -euo pipefail
 
@@ -19,7 +19,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 LIGHTNING_HOST="${LIGHTNING_HOST:?must set LIGHTNING_HOST, e.g. teamspace@your-studio.ssh.lightning.ai}"
 LIGHTNING_SSH_PORT="${LIGHTNING_SSH_PORT:-22}"
-LIGHTNING_PATH="${LIGHTNING_PATH:-/root/osmium}"
+LIGHTNING_PATH="${LIGHTNING_PATH:-/root/kilonova}"
 
 PULL=false
 for arg in "$@"; do
@@ -36,7 +36,7 @@ if [ "$PULL" = true ]; then
     echo "done."
 else
     if [ ! -d "$PROJECT_ROOT/data/processed" ]; then
-        echo "error: data/processed/ not found. run osmium preprocess first." >&2
+        echo "error: data/processed/ not found. run kilonova preprocess first." >&2
         exit 1
     fi
     echo "pushing data/processed/ to ${LIGHTNING_HOST}:${LIGHTNING_PATH}/data/processed/"

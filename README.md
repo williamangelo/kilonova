@@ -1,4 +1,4 @@
-# Osmium
+# Kilonova
 
 A unified CLI for training LLMs from scratch.
 
@@ -17,57 +17,57 @@ uv sync --extra dev
 
 ```bash
 # download and prepare data
-osmium download gutenberg
-osmium clean gutenberg
-osmium preprocess gutenberg
+kilonova download gutenberg
+kilonova clean gutenberg
+kilonova preprocess gutenberg
 
 # train a model
-osmium train gpt2-small --data gutenberg --name my-experiment --epochs 5
+kilonova train gpt2-small --data gutenberg --name my-experiment --epochs 5
 
 # generate text
-osmium generate my-experiment --prompt "Once upon a time"
+kilonova generate my-experiment --prompt "Once upon a time"
 ```
 
 ## CLI Commands
 
 ### Core Pipeline
 
-#### `osmium download <dataset>`
+#### `kilonova download <dataset>`
 
 Download a dataset from the registry or HuggingFace.
 
 ```bash
-osmium download gutenberg                    # built-in dataset
-osmium download huggingface:username/dataset # custom HuggingFace dataset
-osmium download gutenberg --output custom/path
+kilonova download gutenberg                    # built-in dataset
+kilonova download huggingface:username/dataset # custom HuggingFace dataset
+kilonova download gutenberg --output custom/path
 ```
 
-#### `osmium clean <dataset>`
+#### `kilonova clean <dataset>`
 
 Clean a dataset with dataset-specific or generic cleaning.
 
 ```bash
-osmium clean gutenberg
-osmium clean custom --input data/raw/custom --output data/clean/custom
+kilonova clean gutenberg
+kilonova clean custom --input data/raw/custom --output data/clean/custom
 ```
 
-#### `osmium preprocess <dataset>`
+#### `kilonova preprocess <dataset>`
 
 Tokenize cleaned text into binary format.
 
 ```bash
-osmium preprocess gutenberg
-osmium preprocess gutenberg --train-split 0.9
+kilonova preprocess gutenberg
+kilonova preprocess gutenberg --train-split 0.9
 ```
 
-#### `osmium train <architecture>`
+#### `kilonova train <architecture>`
 
 Train a GPT model using preprocessed data.
 
 ```bash
-osmium train gpt2-small --data gutenberg --name quick-test --epochs 5
-osmium train gpt2-small --data gutenberg --config configs/baseline.yaml
-osmium train gpt2-medium --data gutenberg --name medium-run --epochs 10
+kilonova train gpt2-small --data gutenberg --name quick-test --epochs 5
+kilonova train gpt2-small --data gutenberg --config configs/baseline.yaml
+kilonova train gpt2-medium --data gutenberg --name medium-run --epochs 10
 ```
 
 Options:
@@ -84,23 +84,23 @@ Options:
 
 Available architectures: `gpt2-small`, `gpt2-medium`, `gpt2-large`, `gpt2-xlarge`
 
-#### `osmium evaluate <model>`
+#### `kilonova evaluate <model>`
 
 Run evaluation on a trained model.
 
 ```bash
-osmium evaluate my-experiment
-osmium evaluate data/runs/my-experiment/checkpoints/epoch-005.pth
+kilonova evaluate my-experiment
+kilonova evaluate data/runs/my-experiment/checkpoints/epoch-005.pth
 ```
 
-#### `osmium generate <model>`
+#### `kilonova generate <model>`
 
 Generate text from a trained model.
 
 ```bash
-osmium generate my-experiment                              # interactive mode
-osmium generate my-experiment --prompt "Once upon a time"  # one-off generation
-osmium generate my-experiment --temp 0.8 --top-p 0.9
+kilonova generate my-experiment                              # interactive mode
+kilonova generate my-experiment --prompt "Once upon a time"  # one-off generation
+kilonova generate my-experiment --temp 0.8 --top-p 0.9
 ```
 
 Options:
@@ -114,29 +114,29 @@ Options:
 
 ### Discoverability
 
-#### `osmium list datasets`
+#### `kilonova list datasets`
 
 Show available datasets and their status.
 
 ```bash
-osmium list datasets
+kilonova list datasets
 ```
 
-#### `osmium list models`
+#### `kilonova list models`
 
 Show training runs and checkpoints.
 
 ```bash
-osmium list models
+kilonova list models
 ```
 
-#### `osmium info <name>`
+#### `kilonova info <name>`
 
 Display detailed information about a dataset or model.
 
 ```bash
-osmium info gutenberg    # dataset info
-osmium info my-experiment # model/run info
+kilonova info gutenberg    # dataset info
+kilonova info my-experiment # model/run info
 ```
 
 ## Directory Structure
@@ -170,7 +170,7 @@ uv run pytest tests/ -v
 
 ## Development
 
-The CLI uses Click for command handling. Commands are organized in `osmium/commands/`.
+The CLI uses Click for command handling. Commands are organized in `kilonova/commands/`.
 
 Adding a new dataset:
 1. Add entry to `loaders/cleaning/registry.py` with HuggingFace source
