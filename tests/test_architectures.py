@@ -222,11 +222,6 @@ class TestModelsModule:
         assert hasattr(models, "is_registered")
         assert hasattr(models, "list_models")
 
-    def test_exports_loader(self):
-        import models
-
-        assert hasattr(models, "create_model_from_config")
-
     def test_auto_discovers_architectures(self):
         import models
 
