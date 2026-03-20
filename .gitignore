@@ -1,5 +1,5 @@
-# Python
-__pycache__/
+# python
+**/__pycache__/
 *.egg-info/
 .pytest_cache/
 .coverage
@@ -9,22 +9,20 @@ build/
 *.pyc
 *.pyo
 
-# Environment
+# env
 .venv/
 .env
 .env.local
-
-# Tool cache
-.uv-cache/
 .claude/
+.uv-cache/
 .worktrees/
 
-# Project artifacts
+# project artifacts
 data/
 docs/
 models/
 
-# OS
+# os
 .DS_Store
 .vscode/
 .idea/
