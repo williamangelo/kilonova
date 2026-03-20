@@ -1,4 +1,4 @@
-"""Tests for generate command implementation."""
+"""Tests for training utilities."""
 
 from unittest.mock import patch
 

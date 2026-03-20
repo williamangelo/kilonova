@@ -1,4 +1,4 @@
-"""Tests for CLI command error handling and validation."""
+"""Tests for CLI command validation."""
 
 from click.testing import CliRunner
 
@@ -26,4 +26,4 @@ class TestTrainValidation:
             "--data", "nonexistent",
         ])
         assert result.exit_code != 0
-        assert "not preprocessed" in result.output or "Dataset" in result.output
+        assert "Dataset" in result.output
