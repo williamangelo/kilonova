@@ -16,7 +16,7 @@ def cli() -> None:
 
 @cli.command(help="Train a model on preprocessed data.")
 @click.argument("architecture", type=click.Choice(tuple(MODEL_REGISTRY.keys())))
-@click.option("--data", required=True, help="dataset name (uses data/processed/<dataset>/).")
+@click.option("--data", required=True, type=click.Path(), help="path to processed dataset directory (absolute or relative).")
 @click.option("--num-iterations", type=click.IntRange(min=1), default=1000, show_default=True, help="total optimizer steps.")
 @click.option("--batch-size", type=click.IntRange(min=1), default=2, show_default=True, help="micro-batch size per accumulation step.")
 @click.option("--grad-accum-steps", type=click.IntRange(min=1), default=2, show_default=True, help="gradient accumulation steps (effective batch = batch-size * grad-accum-steps).")

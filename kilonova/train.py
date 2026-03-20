@@ -64,7 +64,7 @@ def train_model(
     )
 
     # validate dataset
-    data_dir = Path("data/processed") / data
+    data_dir = Path(data)
     if not data_dir.exists():
         raise FileNotFoundError(
             f"Dataset not found: {data_dir}\n"
