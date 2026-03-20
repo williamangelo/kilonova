@@ -5,7 +5,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-import torch
 
 from kilonova.data import TokenDataset, create_dataloaders
 from kilonova.preprocessing import preprocess_dataset
