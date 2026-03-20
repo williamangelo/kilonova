@@ -1,15 +1,30 @@
-.venv/
+# Python
 __pycache__/
-data/
-.uv-cache/
 *.egg-info/
 .pytest_cache/
 .coverage
 htmlcov/
 dist/
 build/
-.worktrees/
-.env
-.claude/
-docs/
+*.pyc
+*.pyo
 
+# Environment
+.venv/
+.env
+.env.local
+
+# Tool cache
+.uv-cache/
+.claude/
+.worktrees/
+
+# Project artifacts
+data/
+docs/
+models/
+
+# OS
+.DS_Store
+.vscode/
+.idea/
