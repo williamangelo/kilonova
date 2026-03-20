@@ -9,6 +9,10 @@ from models.architectures import (
     list_architectures,
 )
 
+# import architecture modules to trigger registration via @register_architecture
+import models.gpt2  # noqa: F401
+import models.gpt2_from_scratch  # noqa: F401
+
 __all__ = [
     "register_architecture",
     "get_architecture_class",

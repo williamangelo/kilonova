@@ -1,7 +1,7 @@
-# improving on the gpt from scratch implementation by doing the following:
-# 1 - using MultiHeadAttention with scaled dot product and Flash Atention
-# 2 - using pytorch GELU
-# 3 - using pytorch LayerNorm
+"""improving on the gpt from scratch implementation by doing the following:
+1 - using MultiHeadAttention with scaled dot product and Flash Atention
+2 - using pytorch GELU
+3 - using pytorch LayerNorm"""
 
 import torch
 import torch.nn as nn
@@ -55,14 +55,13 @@ class FeedForward(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.layers = nn.Sequential(
-            nn.Linear(cfg["emb_dim"], 4 * cfg["emb_dim"]), # original GPT2 architecture uses this '4' as a hyperparameter
+            nn.Linear(cfg["emb_dim"], 4 * cfg["emb_dim"]),
             nn.GELU(),
             nn.Linear(4 * cfg["emb_dim"], cfg["emb_dim"])
         )
 
     def forward(self, x):
         return self.layers(x)
-
 
 
 class TransformerBlock(nn.Module):
@@ -82,13 +81,13 @@ class TransformerBlock(nn.Module):
         self.drop_shortcut = nn.Dropout(cfg["drop_rate"])
 
     def forward(self, x):
-        shortcut = x # residual connection
+        shortcut = x
         x = self.norm1(x)
         x = self.att(x)
         x = self.drop_shortcut(x)
         x = x + shortcut
 
-        shortcut = x # residual connection
+        shortcut = x
         x = self.norm2(x)
         x = self.ff(x)
         x = self.drop_shortcut(x)

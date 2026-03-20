@@ -6,8 +6,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from kilonova.data import TokenDataset, create_dataloaders
-from kilonova.preprocessing import preprocess_dataset
+from data import TokenDataset, create_dataloaders
+from preprocessing import preprocess_dataset
 import tiktoken
 
 

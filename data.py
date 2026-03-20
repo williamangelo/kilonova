@@ -41,7 +41,6 @@ class TokenDataset(Dataset):
         self.max_length = max_length
         self.stride = stride if stride is not None else max_length
 
-        # determine dtype from sibling metadata.json, fall back to uint16
         meta_path = self.bin_path.parent / "metadata.json"
         if meta_path.exists():
             with open(meta_path) as f:
@@ -120,7 +119,6 @@ def create_dataloaders(
 
     meta = load_meta(data_dir)
 
-    # calculate max_tokens from data_fraction if specified
     if data_fraction is not None:
         max_tokens = int(meta["train_tokens"] * data_fraction)
         val_max_tokens = int(meta["val_tokens"] * data_fraction)
@@ -143,7 +141,7 @@ def create_dataloaders(
     logger.info(f"Loaded preprocessed data from {data_dir}")
     logger.info(f"Train: {len(train_dataset):,} samples, Val: {len(val_dataset):,} samples")
 
-    if max_tokens and val_max_tokens:
+    if max_tokens is not None and val_max_tokens is not None:
         logger.info(f"Token limit: {max_tokens:,} train, {val_max_tokens:,} val ({max_tokens + val_max_tokens:,} total)")
 
     generator = torch.Generator().manual_seed(42)

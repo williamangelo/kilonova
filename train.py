@@ -1,7 +1,12 @@
-"""Training runner."""
+"""Training runner.
+
+Usage:
+    uv run python3 train.py --model gpt2-small --data /path/to/dataset
+"""
 
 from __future__ import annotations
 
+import argparse
 import gc
 import logging
 import math
@@ -12,8 +17,8 @@ from pathlib import Path
 
 import torch
 
-from kilonova.data import create_dataloaders
-from models.architectures import get_model_config, get_architecture_class
+from data import create_dataloaders
+from models.architectures import get_model_config, get_architecture_class, list_models
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +68,6 @@ def train_model(
         datefmt="%H:%M:%S",
     )
 
-    # validate dataset
     data_dir = Path(data)
     if not data_dir.exists():
         raise FileNotFoundError(
@@ -76,7 +80,6 @@ def train_model(
             f"Run the dataset preparation script first (e.g. uv run scripts/gutenberg.py)"
         )
 
-    # create run directory
     date = datetime.now().strftime("%Y%m%d")
     short_id = uuid.uuid4().hex[:7]
     run_id = f"run-{date}-{short_id}"
@@ -88,7 +91,6 @@ def train_model(
     logger.info(f"Training run: {run_id}")
     logger.info(f"Run directory: {run_dir}")
 
-    # resolve device
     device = resolve_device(device)
 
     torch.manual_seed(42)
@@ -100,11 +102,10 @@ def train_model(
     compute_dtype, dtype_reason = detect_compute_dtype(device)
     logger.info(f"Device: {device} | dtype: {compute_dtype} ({dtype_reason})")
 
-    # build model
     model_config = get_model_config(model_name)
-    arch_name = model_config.pop("architecture")
+    arch_name = model_config["architecture"]
     model = get_architecture_class(arch_name)(model_config)
-    model_config["architecture"] = arch_name
+
 
     total_params = sum(p.numel() for p in model.parameters())
     param_str = f"{total_params/1e9:.1f}B" if total_params >= 1e9 else f"{total_params/1e6:.0f}M"
@@ -117,7 +118,6 @@ def train_model(
     # torch.compile causes memory bloat on non-cuda backends
     compiled_model = torch.compile(model) if device.type == "cuda" else model
 
-    # data
     train_loader, val_loader = create_dataloaders(
         data_dir=str(data_dir),
         batch_size=batch_size,
@@ -126,7 +126,6 @@ def train_model(
     )
     train_iter = iter(train_loader)
 
-    # optimizer
     optimizer = torch.optim.AdamW(
         compiled_model.parameters(),
         lr=learning_rate,
@@ -200,7 +199,6 @@ def train_model(
             if last_step:
                 break
 
-            # set lr
             lr = get_lr(step)
             for group in optimizer.param_groups:
                 group["lr"] = lr
@@ -248,3 +246,39 @@ def train_model(
         gc.enable()
 
     logger.info(f"Training complete: {run_id} | best val: {best_val_loss:.4f}")
+
+
+def main():
+    available_models = list_models()
+
+    parser = argparse.ArgumentParser(
+        description="Train a language model on preprocessed data.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument("--model", required=True, choices=available_models, help="model configuration to train")
+    parser.add_argument("--data", required=True, help="path to processed dataset directory")
+    parser.add_argument("--num-iterations", type=int, default=1000, help="total optimizer steps")
+    parser.add_argument("--batch-size", type=int, default=2, help="micro-batch size per accumulation step")
+    parser.add_argument("--grad-accum-steps", type=int, default=2, help="gradient accumulation steps")
+    parser.add_argument("--learning-rate", type=float, default=4e-4, help="peak learning rate")
+    parser.add_argument("--data-fraction", type=float, default=None, help="fraction of data to use (0-1)")
+    parser.add_argument("--eval-every", type=int, default=250, help="eval every N steps (-1 to disable)")
+    parser.add_argument("--device", choices=["auto", "cuda", "cpu"], default="auto", help="device for training")
+
+    args = parser.parse_args()
+
+    train_model(
+        model_name=args.model,
+        data=args.data,
+        device=args.device,
+        num_iterations=args.num_iterations,
+        batch_size=args.batch_size,
+        grad_accum_steps=args.grad_accum_steps,
+        learning_rate=args.learning_rate,
+        data_fraction=args.data_fraction,
+        eval_every=args.eval_every,
+    )
+
+
+if __name__ == "__main__":
+    main()

@@ -144,7 +144,6 @@ def preprocess_dataset(
     logger.info(f"Output dtype: {dtype_name}")
     logger.info(f"Train/val split: {train_ratio:.0%}/{1-train_ratio:.0%}")
 
-    # first pass: count total tokens
     logger.info("Counting tokens...")
     total_tokens = 0
     with tqdm(total=total_size, unit='B', unit_scale=True, desc="Pass 1/2") as pbar:
@@ -161,7 +160,6 @@ def preprocess_dataset(
     logger.info(f"Train tokens: {split_idx:,}")
     logger.info(f"Val tokens: {total_tokens - split_idx:,}")
 
-    # second pass: write tokens to disk with accurate split
     train_path = output_path / "train.bin"
     val_path = output_path / "val.bin"
 

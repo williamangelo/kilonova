@@ -5,15 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "kilonova"
 version = "0.1.0"
-description = "A unified CLI for training LLMs from scratch."
+description = "Train LLMs from scratch."
 readme = "README.md"
 requires-python = ">=3.13"
 license = { file = "LICENSE" }
 authors = [{ name = "williamangelo" }]
 dependencies = [
-    "click>=8.1.7",
     "datasets>=4.2.0",
-"tiktoken>=0.11.0",
+    "tiktoken>=0.11.0",
     "torch>=2.8.0",
     "tqdm>=4.67.1",
 ]
@@ -26,9 +25,6 @@ dev = [
 [project.urls]
 Repository = "https://github.com/williamangelo/kilonova"
 
-[project.scripts]
-kilonova = "kilonova.cli:main"
-
-[tool.setuptools.packages.find]
-include = ["kilonova*", "models*"]
-exclude = ["data*", "scripts*", "docs*"]
+[tool.setuptools]
+py-modules = ["train", "data", "preprocessing"]
+packages = ["models"]

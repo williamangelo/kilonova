@@ -96,7 +96,7 @@ def tokenize(train_ratio: float = 0.85):
                 count += 1
         logger.info(f"Exported {count} documents to {txt_dir}")
 
-    from kilonova.preprocessing import preprocess_dataset
+    from preprocessing import preprocess_dataset
     preprocess_dataset(
         input_dir=str(txt_dir),
         output_dir=str(PROCESSED_DIR),
