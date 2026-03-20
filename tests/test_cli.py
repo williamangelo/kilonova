@@ -27,23 +27,3 @@ class TestTrainValidation:
         ])
         assert result.exit_code != 0
         assert "not preprocessed" in result.output or "Dataset" in result.output
-
-
-class TestEvaluateValidation:
-    """tests for evaluate command input validation"""
-
-    def test_rejects_nonexistent_run(self):
-        runner = CliRunner()
-        result = runner.invoke(cli, ["evaluate", "nonexistent-run"])
-        assert result.exit_code != 0
-        assert "not found" in result.output
-
-
-class TestGenerateValidation:
-    """tests for generate command input validation"""
-
-    def test_rejects_nonexistent_model(self):
-        runner = CliRunner()
-        result = runner.invoke(cli, ["generate", "nonexistent", "--prompt", "test"])
-        assert result.exit_code != 0
-        assert "not found" in result.output

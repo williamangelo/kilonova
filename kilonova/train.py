@@ -6,6 +6,8 @@ import gc
 import logging
 import math
 import time
+import uuid
+from datetime import datetime
 from pathlib import Path
 
 import torch
@@ -42,12 +44,11 @@ def detect_compute_dtype(device: torch.device) -> tuple[torch.dtype, str]:
     return torch.float32, f"no CUDA ({device.type})"
 
 
-def run_training(
+def train_model(
     *,
     model_name: str,
-    data_dir: Path,
-    run_dir: Path | None,
-    device: torch.device,
+    data: str,
+    device: str,
     num_iterations: int,
     batch_size: int,
     grad_accum_steps: int,
@@ -61,6 +62,34 @@ def run_training(
         format="[%(asctime)s] %(levelname)s: %(message)s",
         datefmt="%H:%M:%S",
     )
+
+    # validate dataset
+    data_dir = Path("data/processed") / data
+    if not data_dir.exists():
+        raise FileNotFoundError(
+            f"Dataset not found: {data_dir}\n"
+            f"Run the dataset preparation script first (e.g. uv run scripts/gutenberg.py)"
+        )
+    if not (data_dir / "train.bin").exists() or not (data_dir / "val.bin").exists():
+        raise FileNotFoundError(
+            f"Dataset incomplete: missing train.bin or val.bin in {data_dir}\n"
+            f"Run the dataset preparation script first (e.g. uv run scripts/gutenberg.py)"
+        )
+
+    # create run directory
+    date = datetime.now().strftime("%Y%m%d")
+    short_id = uuid.uuid4().hex[:7]
+    run_id = f"run-{date}-{short_id}"
+    run_dir = Path("data/runs") / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_dir = run_dir / "checkpoints"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+    logger.info(f"Training run: {run_id}")
+    logger.info(f"Run directory: {run_dir}")
+
+    # resolve device
+    device = resolve_device(device)
 
     torch.manual_seed(42)
 
@@ -124,12 +153,6 @@ def run_training(
     if eval_every > 0:
         logger.info(f"Eval every {eval_every} steps")
 
-    # checkpoint dir
-    checkpoint_dir = None
-    if run_dir:
-        checkpoint_dir = run_dir / "checkpoints"
-        checkpoint_dir.mkdir(parents=True, exist_ok=True)
-
     use_autocast = compute_dtype != torch.float32
     smooth_loss = 0.0
     best_val_loss = float("inf")
@@ -165,15 +188,14 @@ def run_training(
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
                     logger.info(f"New best val loss: {best_val_loss:.4f}")
-                    if checkpoint_dir:
-                        torch.save({
-                            "model_state_dict": model.state_dict(),
-                            "config": model_config,
-                            "model_name": model_name,
-                            "val_loss": best_val_loss,
-                            "step": step,
-                        }, checkpoint_dir / "best.pth")
-                        logger.info(f"Saved checkpoint: {checkpoint_dir / 'best.pth'}")
+                    torch.save({
+                        "model_state_dict": model.state_dict(),
+                        "config": model_config,
+                        "model_name": model_name,
+                        "val_loss": best_val_loss,
+                        "step": step,
+                    }, checkpoint_dir / "best.pth")
+                    logger.info(f"Saved checkpoint: {checkpoint_dir / 'best.pth'}")
 
             if last_step:
                 break
@@ -225,4 +247,4 @@ def run_training(
     finally:
         gc.enable()
 
-    logger.info(f"Training complete | best val: {best_val_loss:.4f}")
+    logger.info(f"Training complete: {run_id} | best val: {best_val_loss:.4f}")
